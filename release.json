@@ -1,13 +1,13 @@
 {
-  "version": "2.8",
-  "notes": "Fixes years getting picked by themselves when choosing a vehicle on a Mac.",
+  "version": "2.9",
+  "notes": "Restarts correctly in the new stand-alone Mac app (no Python needed).",
   "files": {
     "car_code_reader.py": "8879d84fb2fe638b9b0127d1e897d4ad0029d2e8f620b84c64867d9cd06a9f19",
     "obd_core.py": "4fcbbea157c8b6ba0d6caf493d138297eba9003cd501c6c205f89994f3205cb5",
     "dtc_database.py": "a1a338f2f1f5645585eb41feffbbe0610a0ef6a53ac10a407ea3bc901c70390c",
     "icons.py": "3e5c45919ee6779df8024c01672b23fc26b3bbe43a3f0daa9f3d3ee3be6dd3e6",
     "vehicles.py": "88e1fa2299ea36901b8d020531e9184cb94f583b9224cc6b9fc566ab922d49a8",
-    "updater.py": "7592050d0b436b149454fb214d98284a19e60aae87bdfe43c3a01965801cf980",
+    "updater.py": "30064db038c363b2e17a0d2585784ac502a5a96eeac7bb02d780e492504f3117",
     "j1939.py": "3f9db2423781380ede9f4f40d40037383cf978bc46c265cfb6dbed242801e360",
     "obd1.py": "99da383acb7eb6fa18604500f05ec623214af6c10b0ffc9f00b56f0ea56db70e",
     "icon.png": "635873108e9b9e6e7bd54b68695ad71151c96e2ff78cad1ed53db48a13a2f71c"

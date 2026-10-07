@@ -1,0 +1,100 @@
+name: Build Mac app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["source/start.py", "source/mac/**", ".github/workflows/build-mac.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  mac:
+    runs-on: macos-14   # Apple silicon (arm64)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: python -m pip install --upgrade pyinstaller pyserial
+
+      - name: Assemble the app files
+        run: |
+          set -e
+          mkdir -p work/app
+          cp app/* work/app/
+          VERSION=$(python -c "import json;print(json.load(open('release.json'))['version'])")
+          echo "VERSION = \"$VERSION\"" > work/app/version.py
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          cp source/start.py work/start.py
+
+      - name: Build with PyInstaller
+        working-directory: work
+        run: |
+          set -e
+          EXCL=""
+          for m in car_code_reader obd_core dtc_database icons vehicles version updater j1939 obd1; do
+            EXCL="$EXCL --exclude-module $m"
+          done
+          python -m PyInstaller --noconfirm --clean --windowed \
+            --name "Car Code Reader" \
+            --icon ../source/mac/AppIcon.icns \
+            --osx-bundle-identifier local.carcodereader \
+            --add-data "app:app" $EXCL start.py
+
+      - name: Finish the app bundle
+        working-directory: work
+        run: |
+          set -e
+          APP="dist/Car Code Reader.app"
+          PL="$APP/Contents/Info.plist"
+          plutil -replace CFBundleShortVersionString -string "$VERSION" "$PL"
+          plutil -replace CFBundleVersion -string "$VERSION" "$PL"
+          plutil -replace LSMinimumSystemVersion -string "11.0" "$PL"
+          plutil -replace NSBluetoothAlwaysUsageDescription -string "Car Code Reader talks to Bluetooth OBD-II adapters." "$PL"
+          plutil -replace NSLocalNetworkUsageDescription -string "Car Code Reader talks to Wi-Fi OBD-II adapters." "$PL"
+          codesign --force --deep -s - "$APP"
+          codesign --verify --deep --strict "$APP"
+
+      - name: Self-test (no Python on the path)
+        working-directory: work
+        run: |
+          set -e
+          export HOME="$RUNNER_TEMP/home"; mkdir -p "$HOME"
+          env -i HOME="$HOME" PATH=/usr/bin:/bin "dist/Car Code Reader.app/Contents/MacOS/Car Code Reader" --selftest
+          env -i HOME="$HOME" PATH=/usr/bin:/bin "dist/Car Code Reader.app/Contents/MacOS/Car Code Reader" --version
+          file "dist/Car Code Reader.app/Contents/MacOS/Car Code Reader"
+
+      - name: Make the DMG
+        working-directory: work
+        run: |
+          set -e
+          mkdir dmg
+          cp -R "dist/Car Code Reader.app" dmg/
+          ln -s /Applications dmg/Applications
+          cp ../source/mac/Install.txt "dmg/How to install.txt"
+          hdiutil create -volname "Car Code Reader" -srcfolder dmg -ov -format UDZO Car-Code-Reader.dmg
+          hdiutil verify Car-Code-Reader.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Car-Code-Reader-dmg
+          path: work/Car-Code-Reader.dmg
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          TAG="mac-v$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" work/Car-Code-Reader.dmg --clobber
+          else
+            gh release create "$TAG" work/Car-Code-Reader.dmg --latest \
+              --title "Car Code Reader $VERSION for Mac" \
+              --notes "Stand-alone Mac app: Python is built in. Download Car-Code-Reader.dmg, drag the app to Applications, then use Open Anyway once (System Settings > Privacy & Security)."
+          fi

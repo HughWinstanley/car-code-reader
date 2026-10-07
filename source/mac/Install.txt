@@ -1,0 +1,7 @@
+Car Code Reader - stand-alone Mac app (Python is built in; nothing else to install)
+
+1. Drag "Car Code Reader" onto the Applications folder in this window.
+2. Open it from Applications. The first time, macOS blocks it because it isn't
+   from the App Store: click Done, then open System Settings > Privacy & Security,
+   scroll down and click "Open Anyway" next to Car Code Reader. Only needed once.
+3. Updates install from inside the app (Help > Check for updates). No reinstalling.

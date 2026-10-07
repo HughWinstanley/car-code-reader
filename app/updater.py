@@ -119,6 +119,8 @@ def install(rel, progress=None):
 
 def restart():
     """Start the app again from start.py (which picks up the new files) and end this copy."""
+    if getattr(sys, "frozen", False):  # stand-alone Mac app: just start the app's own program again
+        os.execv(sys.executable, [sys.executable])
     start = os.environ.get("CCR_START") or os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "start.py")
     if not os.path.exists(start):
         start = sys.argv[0]
