@@ -2300,9 +2300,14 @@ class App:
     # Code lookup
     def lookup_code(self):
         code = re.sub(r"[^A-Za-z0-9]", "", self.lookup_var.get()).upper()
+        if len(code) == 5:  # people often type the letter O for zero ("PO300") or I for one
+            code = code[0] + code[1:].replace("O", "0").replace("I", "1")
+        self.lookup_var.set(code)
+        self.root.after(60, self._show_lookup_result)  # bring the answer into view
         self._clear(self.lookup_result)
         if not re.fullmatch(r"[PCBU][0-9A-F]{4}", code):
-            self._line(self.lookup_result, "Type a code like P0301, C0035, B1932 or U0100.", color=C["muted"],
+            self._line(self.lookup_result, "Type a code like P0301, C0035, B1932 or U0100 (a letter, then 4 "
+                                           "numbers or letters).", color=C["muted"],
                        pady=(10, 0))
             return
         info = describe_dtc(code, self._current_make())
@@ -2323,6 +2328,14 @@ class App:
         PillButton(row, "Search for repair info", lambda: self.lookup_online(code)).pack(side="left")
         PillButton(row, "Repair videos", lambda: self.lookup_online(code, videos=True)).pack(side="left",
                                                                                            padx=(10, 0))
+
+    def _show_lookup_result(self):
+        """Scroll the Tests page so the typed code and the start of its answer are at the top."""
+        self.root.update_idletasks()
+        inner = self.tests_area.inner
+        y = self.lookup_result.winfo_rooty() - inner.winfo_rooty() - 90
+        total = max(1, inner.winfo_height())
+        self.tests_area.canvas.yview_moveto(max(0.0, y / total))
 
     # Self-test results (mode $06)
     def read_self_tests(self):
