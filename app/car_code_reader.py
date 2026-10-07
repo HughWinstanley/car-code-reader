@@ -512,8 +512,18 @@ class App:
         root.after(50, self._drain)
         root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.update_rel = None
-        threading.Thread(target=lambda: self.ui(lambda r=updater.check(): self._update_found(r, quiet=True)),
-                         daemon=True).start()
+        self._auto_check_updates()
+
+    AUTO_CHECK_MS = 30 * 60 * 1000  # while the app is open, look for a new version every 30 minutes
+
+    def _auto_check_updates(self):
+        """Look for a new version in the background: at start-up, then every 30 minutes."""
+        if not self.update_rel:  # once one is found, the notice stays up; no need to keep asking
+            def found(r):
+                if r and not self.update_rel:
+                    self._update_found(r, quiet=True)
+            threading.Thread(target=lambda: self.ui(lambda r=updater.check(): found(r)), daemon=True).start()
+        self.root.after(self.AUTO_CHECK_MS, self._auto_check_updates)
 
     # --- threading ---------------------------------------------------------------------
     def ui(self, fn):
