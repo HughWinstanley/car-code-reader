@@ -731,25 +731,45 @@ class ELM327:
 
     def initialize(self):
         self.send("ATZ", timeout=4)
-        for c in ("ATE0", "ATL0", "ATS0", "ATH1", "ATAT1", "ATSP0"):
+        for c in ("ATE0", "ATL0", "ATS0", "ATH1", "ATAT1"):
             self.send(c)
         self.version = " ".join(self.send("ATI")) or "unknown"
         sti = " ".join(self.send("STI", timeout=1.5))  # OBDLink (STN chip) adapters answer this
         self.is_stn = "STN" in sti.upper()
         if self.is_stn:
             self.version = (" ".join(self.send("STDI", timeout=1.5)) or "OBDLink") + f" ({sti})"
-        lines = self.send("0100", timeout=25)  # starts the automatic protocol search
+        self.ecus = []
+        self.send("ATSP0")                   # first let the adapter search automatically
+        if self._handshake(timeout=25):
+            return
+        # Auto-detect found nothing. Some vehicles need the protocol forced: 1996-2005 GM trucks
+        # speak J1850 VPW (protocol 2), older imports use ISO 9141 or KWP. Try each one directly.
+        for proto in ("2", "1", "3", "4", "5", "6", "7", "8", "9"):
+            self.send(f"ATSP{proto}")
+            if self._handshake(timeout=12):
+                return
+        self.send("ATSP0")                   # leave it back on automatic
+        self.protocol = ""
+        self.protocol_name = ""
+        raise ConnectionError(
+            "The adapter is working, but the car didn't answer.\n\n"
+            "- Turn the ignition ON (engine can be off or running)\n"
+            "- Make sure the adapter is pushed fully into the OBD port\n"
+            "- Cars older than 1996 (US) don't have OBD-II")
+
+    def _handshake(self, timeout):
+        """Ask the engine computer to identify itself (0100). Returns True if any module answered,
+        and records which protocol worked. Used for both the automatic search and the per-protocol retries."""
+        lines = self.send("0100", timeout=timeout)
         dpn = "".join(self.send("ATDPN")).strip().upper()
-        self.protocol = dpn[-1:] if dpn else ""
-        self.protocol_name = " ".join(self.send("ATDP")).replace("AUTO, ", "")
+        self.protocol = dpn[-1:] if dpn else ""     # set before parse(): it picks CAN vs older by protocol
         res = self.parse(lines)
-        self.ecus = sorted(h for h, msgs in res.items() if any(m[:2] == b"\x41\x00" for m in msgs))
-        if not self.ecus:
-            raise ConnectionError(
-                "The adapter is working, but the car didn't answer.\n\n"
-                "- Turn the ignition ON (engine can be off or running)\n"
-                "- Make sure the adapter is pushed fully into the OBD port\n"
-                "- Cars older than 1996 (US) don't have OBD-II")
+        ecus = sorted(h for h, msgs in res.items() if any(m[:2] == b"\x41\x00" for m in msgs))
+        if ecus:
+            self.ecus = ecus
+            self.protocol_name = " ".join(self.send("ATDP")).replace("AUTO, ", "")
+            return True
+        return False
 
     def voltage(self):
         return " ".join(self.send("ATRV")) or "-"
