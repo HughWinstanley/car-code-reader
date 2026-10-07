@@ -73,6 +73,29 @@ def F(size, weight="normal"):
 # ----------------------------------------------------------------------------
 # Small custom widgets (they look the same on Mac, Windows and Linux)
 # ----------------------------------------------------------------------------
+def bind_click(widget, command, also=()):
+    """Standard button behavior: act when the mouse button is released over the widget, and only if it
+    was also pressed there. This stops a click that changes the page from 'landing' on whatever widget
+    appears under the pointer on the new page (macOS delivers that release to the new widget)."""
+    targets = (widget,) + tuple(also)
+    state = {"armed": False}
+
+    def press(_e):
+        state["armed"] = True
+
+    def release(e):
+        armed, state["armed"] = state["armed"], False
+        if not armed:
+            return
+        under = widget.winfo_containing(e.x_root, e.y_root)
+        if under is not None and any(str(under) == str(t) or str(under).startswith(str(t) + ".") for t in targets):
+            command()
+
+    for t in targets:
+        t.bind("<ButtonPress-1>", press, add="+")
+        t.bind("<ButtonRelease-1>", release, add="+")
+
+
 class PillButton(tk.Canvas):
     STYLES = {
         "primary": {"fill": "#000000", "hover": "#2A2A2A", "text": "#FFFFFF", "outline": "#000000"},
@@ -89,7 +112,7 @@ class PillButton(tk.Canvas):
         self.set_text(text)
         self.bind("<Enter>", lambda e: self._hover(True))
         self.bind("<Leave>", lambda e: self._hover(False))
-        self.bind("<ButtonRelease-1>", lambda e: self._click())
+        bind_click(self, self._click)
         self.bind("<Return>", lambda e: self._click())
         self.bind("<space>", lambda e: self._click())
         self.bind("<FocusIn>", lambda e: self._draw())
@@ -138,7 +161,7 @@ class LinkLabel(tk.Label):
         under.configure(underline=True)
         self._fonts = (F(size, "bold"), under)
         super().__init__(parent, text=text, fg="#000000", bg=parent["bg"], font=self._fonts[1], cursor="hand2")
-        self.bind("<Button-1>", lambda e: command())
+        bind_click(self, command)
 
 
 class Lamp(tk.Canvas):
@@ -319,7 +342,7 @@ class Tile(tk.Canvas):
         self.w = width
         self.card = None
         self.set_height(self.h)
-        self.bind("<Button-1>", lambda e: self.command())
+        bind_click(self, lambda: self.command())
         self.bind("<Return>", lambda e: self.command())
         self.bind("<Enter>", lambda e: self.itemconfigure(self.card, outline="#000000", width=2))
         # (set_height draws the card)
@@ -387,8 +410,8 @@ class ProblemRow(RoundPanel):
                             bg=C["panel"], fg=C["muted"], font=F(12), anchor="w")
         self.sub.pack(fill="x", pady=(2, 0), padx=(28, 0))
         self.details = tk.Frame(self.body, bg=C["panel"])
+        bind_click(self, self.toggle, also=(self.body, top, self.title, self.sub, dot, pill))
         for w in (self, self.body, top, self.title, self.sub, dot, pill):
-            w.bind("<Button-1>", lambda e: self.toggle())
             w.configure(cursor="hand2")
 
     def toggle(self):
@@ -551,7 +574,7 @@ class App:
         for name in self.PAGES:
             item = tk.Canvas(side, width=176, height=42, bg=C["side"], highlightthickness=0, cursor="hand2")
             item.pack(padx=12, pady=2, anchor="w")
-            item.bind("<Button-1>", lambda e, n=name: self.show_page(n))
+            bind_click(item, lambda n=name: self.show_page(n))
             item.bind("<Enter>", lambda e, n=name: self._nav_draw(n, hover=True))
             item.bind("<Leave>", lambda e, n=name: self._nav_draw(n))
             self.nav[name] = item
@@ -891,7 +914,8 @@ class App:
         self.pick_search = tk.StringVar()
         entry = ttk.Entry(bar, textvariable=self.pick_search, width=28, font=F(13))
         entry.pack(side="left", padx=8)
-        self.pick_search.trace_add("write", lambda *a: self._pick_fill())
+        self._pick_quiet = False
+        self.pick_search.trace_add("write", lambda *a: None if self._pick_quiet else self._pick_fill())
         self.pick_area = ScrollArea(page, C["page"])
         self.pick_area.pack(fill="both", expand=True)
         self.pick_step, self.pick_make, self.pick_model = "make", None, None
@@ -900,7 +924,7 @@ class App:
     def open_picker(self):
         self.pick_step, self.pick_make, self.pick_model = "make", None, None
         self.show_page("Choose vehicle")
-        self.pick_search.set("")
+        self._pick_reset_search()
         self._pick_fill()
 
     def _pick_back(self):
@@ -911,7 +935,7 @@ class App:
         else:
             self.show_page("Home")
             return
-        self.pick_search.set("")
+        self._pick_reset_search()
         self._pick_fill()
 
     def _pick_fill(self):
@@ -963,14 +987,19 @@ class App:
             tk.Label(inner, text=note, bg=C["page"], fg=C["muted"], font=F(12), anchor="w").pack(
                 fill="x", pady=(8, 0))
 
+    def _pick_reset_search(self):
+        self._pick_quiet = True
+        self.pick_search.set("")
+        self._pick_quiet = False
+
     def _pick_set_make(self, make):
         self.pick_make, self.pick_step = make, "model"
-        self.pick_search.set("")
+        self._pick_reset_search()
         self._pick_fill()
 
     def _pick_set_model(self, model, kind):
         self.pick_model, self.pick_kind, self.pick_step = model, kind, "year"
-        self.pick_search.set("")
+        self._pick_reset_search()
         self._pick_fill()
 
     def _pick_set_year(self, year):

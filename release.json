@@ -1,8 +1,8 @@
 {
-  "version": "2.7",
-  "notes": "Each model now shows only the years it was sold. Smoother scrolling in lists.",
+  "version": "2.8",
+  "notes": "Fixes years getting picked by themselves when choosing a vehicle on a Mac.",
   "files": {
-    "car_code_reader.py": "2d5df5003147dccd75d8fb1b7798deaafef2e06d5a8b93c4cf8f8bda1f92c997",
+    "car_code_reader.py": "8879d84fb2fe638b9b0127d1e897d4ad0029d2e8f620b84c64867d9cd06a9f19",
     "obd_core.py": "4fcbbea157c8b6ba0d6caf493d138297eba9003cd501c6c205f89994f3205cb5",
     "dtc_database.py": "a1a338f2f1f5645585eb41feffbbe0610a0ef6a53ac10a407ea3bc901c70390c",
     "icons.py": "3e5c45919ee6779df8024c01672b23fc26b3bbe43a3f0daa9f3d3ee3be6dd3e6",
