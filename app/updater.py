@@ -36,6 +36,21 @@ def base_url():
     return f"https://raw.githubusercontent.com/{UPDATE_REPO}/{BRANCH}"
 
 
+def _latest_base():
+    """The newest published files, by their exact commit. GitHub's normal links are cached for up to 5 minutes,
+    so a just-published update could be missed; asking which commit is newest and reading that one avoids it."""
+    if os.environ.get("CCR_UPDATE_URL") or not UPDATE_REPO:
+        return base_url()
+    try:
+        sha = _fetch(f"https://api.github.com/repos/{UPDATE_REPO}/commits/{BRANCH}", timeout=10,
+                     accept="application/vnd.github.sha").decode("ascii").strip()
+        if re.fullmatch(r"[0-9a-f]{40}", sha):
+            return f"https://raw.githubusercontent.com/{UPDATE_REPO}/{sha}"
+    except Exception:  # noqa: BLE001 - offline or GitHub busy: fall back to the normal link
+        pass
+    return base_url()
+
+
 def updates_dir():
     if sys.platform == "darwin":
         root = os.path.expanduser("~/Library/Application Support/Car Code Reader")
@@ -50,12 +65,13 @@ def parse_version(text):
     return tuple(int(x) for x in re.findall(r"\d+", text or "0"))
 
 
-def _fetch(url, timeout=15):
+def _fetch(url, timeout=15, accept=None):
     """Download bytes. On a Mac, use the built-in curl first: it trusts the system's certificates,
     which a freshly installed python.org Python often doesn't."""
     if sys.platform == "darwin" and os.path.exists("/usr/bin/curl"):
         try:
-            out = subprocess.run(["/usr/bin/curl", "-fsSL", "--max-time", str(timeout), url],
+            extra = ["-H", f"Accept: {accept}"] if accept else []
+            out = subprocess.run(["/usr/bin/curl", "-fsSL", "--max-time", str(timeout), *extra, url],
                                  capture_output=True, timeout=timeout + 5)
             if out.returncode == 0:
                 return out.stdout
@@ -68,19 +84,21 @@ def _fetch(url, timeout=15):
     except ImportError:
         pass
     req = urllib.request.Request(url, headers={"User-Agent": f"CarCodeReader/{VERSION}",
-                                               "Cache-Control": "no-cache"})
+                                               "Cache-Control": "no-cache",
+                                               **({"Accept": accept} if accept else {})})
     with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
         return r.read()
 
 
 def check():
     """-> release dict if a newer version is published, else None. Never raises."""
-    base = base_url()
-    if not base:
+    if not base_url():
         return None
     try:
+        base = _latest_base()
         rel = json.loads(_fetch(f"{base}/release.json").decode("utf-8"))
         if parse_version(rel.get("version")) > parse_version(VERSION) and rel.get("files"):
+            rel["_base"] = base  # download the files from the same commit
             return rel
     except Exception:  # noqa: BLE001 - offline, repo missing, bad JSON: just no update
         return None
@@ -90,7 +108,7 @@ def check():
 def install(rel, progress=None):
     """Download every file, verify it, then swap the new set in. Raises on any problem,
     leaving the current version untouched."""
-    base, target = base_url(), updates_dir()
+    base, target = rel.get("_base") or base_url(), updates_dir()
     os.makedirs(os.path.dirname(target), exist_ok=True)
     staging = tempfile.mkdtemp(prefix="update-", dir=os.path.dirname(target))
     try:

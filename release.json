@@ -1,13 +1,13 @@
 {
-  "version": "2.14",
-  "notes": "Sharper logo in the top bar.",
+  "version": "2.15",
+  "notes": "Sharper logo, and new updates show up right away.",
   "files": {
     "car_code_reader.py": "58b8883eb7362b0ca7663f2caf96fca7073f85cf57993ab782012ab608444bda",
     "obd_core.py": "4fcbbea157c8b6ba0d6caf493d138297eba9003cd501c6c205f89994f3205cb5",
     "dtc_database.py": "a1a338f2f1f5645585eb41feffbbe0610a0ef6a53ac10a407ea3bc901c70390c",
     "icons.py": "ec99645f92674dd24806c823d75f95829fde72f2b1daaccf78373f34ad11b2d5",
     "vehicles.py": "88e1fa2299ea36901b8d020531e9184cb94f583b9224cc6b9fc566ab922d49a8",
-    "updater.py": "30064db038c363b2e17a0d2585784ac502a5a96eeac7bb02d780e492504f3117",
+    "updater.py": "ed6c8acc6a590f73335d12132b20a388ba334804ed7afd7271b54e287ebc9bc3",
     "j1939.py": "3f9db2423781380ede9f4f40d40037383cf978bc46c265cfb6dbed242801e360",
     "obd1.py": "99da383acb7eb6fa18604500f05ec623214af6c10b0ffc9f00b56f0ea56db70e",
     "icon.png": "635873108e9b9e6e7bd54b68695ad71151c96e2ff78cad1ed53db48a13a2f71c"
