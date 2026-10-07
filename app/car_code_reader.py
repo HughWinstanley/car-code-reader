@@ -579,7 +579,7 @@ class ProblemRow(RoundPanel):
 # The app
 # ----------------------------------------------------------------------------
 class App:
-    PAGES = ["Home", "Problems", "Live data", "Smog check", "Tests", "Vehicle", "Service", "History", "Help"]
+    PAGES = ["Home", "Problems", "Live data", "Smog check", "Tests", "Vehicle", "History", "Help"]
 
     def __init__(self, root):
         self.root = root
@@ -735,7 +735,6 @@ class App:
             "Smog check": self._build_smog(),
             "Tests": self._build_tests(),
             "Vehicle": self._build_vehicle(),
-            "Service": self._build_service(),
             "History": self._build_history(),
             "Help": self._build_help(),
         }
