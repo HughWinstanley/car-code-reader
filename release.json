@@ -1,8 +1,8 @@
 {
-  "version": "2.20",
-  "notes": "Code lookup accepts PO (letter O) and shows the answer right away.",
+  "version": "2.21",
+  "notes": "Renamed the blink-code tile to OBD-I.",
   "files": {
-    "car_code_reader.py": "05fc7d4afa1f6d2ddb5f0d411204b92508b5f9f00d4a217dbe17be847ae7450e",
+    "car_code_reader.py": "fc5d1651ab39b0c97bb56fa50deaf6d2421a42fd1378af9112bce6faa2a1b5f1",
     "obd_core.py": "67ae192558f071aa04431501fa771ecc1dc3843aecd7f5946efbec8def6cbd73",
     "dtc_database.py": "c2602d0123c271a96253dcac398ee67c2d0e4ed4366c91b13c7efe14557ec161",
     "icons.py": "ee6ab531fcf7008f0c40b5612eb419db8fd9ab755b8d2feceeaa7335f6d48175",

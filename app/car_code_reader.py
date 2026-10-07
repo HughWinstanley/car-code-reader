@@ -843,7 +843,7 @@ class App:
             ("Live data", "Engine readings in real time", art("gauge", "gauge"), self.open_live),
             ("Smog check", "Ready for an emissions test?", art("smog", "smog"),
              lambda: self.show_page("Smog check")),
-            ("1995 and older", "Read blink codes, no adapter", art("blink", "old"), lambda: self.open_obd1()),
+            ("OBD-I", "Blink codes (1995 & older), no adapter", art("blink", "old"), lambda: self.open_obd1()),
             ("Choose vehicle", "Make, model and year", art("vehicle", "vehicle"), self.open_picker),
         ], columns=4, width=184, art=92, title_size=14)
         return page
