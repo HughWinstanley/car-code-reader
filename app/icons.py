@@ -36,6 +36,7 @@ def rounded_rect(cv, x0, y0, x1, y1, r, **kw):
     r = max(0, min(r, (x1 - x0) / 2, (y1 - y0) / 2))
     pts = [x0 + r, y0, x1 - r, y0, x1, y0, x1, y0 + r, x1, y1 - r, x1, y1, x1 - r, y1,
            x0 + r, y1, x0, y1, x0, y1 - r, x0, y0 + r, x0, y0]
+    kw.setdefault("splinesteps", 36)  # many steps = smooth corners on high-resolution screens
     return cv.create_polygon(pts, smooth=True, **kw)
 
 
@@ -234,6 +235,34 @@ def _blink(cv, cx, cy, s, c):
         cv.create_line(x0, y0, x1, y1, fill=c, width=w, capstyle="round")
 
 
+def _home(cv, cx, cy, s, c):
+    """A house."""
+    u = s / 10
+    w = max(2, s / 14)
+    cv.create_polygon(cx - 4.4 * u, cy - 0.4 * u, cx, cy - 4.4 * u, cx + 4.4 * u, cy - 0.4 * u,
+                      fill="", outline=c, width=w, joinstyle="round")
+    cv.create_rectangle(cx - 3 * u, cy - 1.2 * u, cx + 3 * u, cy + 3.8 * u, fill=c, outline="")
+    cv.create_rectangle(cx - 0.9 * u, cy + 1 * u, cx + 0.9 * u, cy + 3.8 * u, fill=_bg(cv), outline="")
+
+
+def _alert(cv, cx, cy, s, c):
+    """A warning triangle with an exclamation mark."""
+    u = s / 10
+    cv.create_polygon(cx, cy - 4.2 * u, cx + 4.6 * u, cy + 3.6 * u, cx - 4.6 * u, cy + 3.6 * u,
+                      fill=c, outline=c, width=max(2, s / 12), joinstyle="round")
+    bg = _bg(cv)
+    cv.create_line(cx, cy - 1.6 * u, cx, cy + 1.1 * u, fill=bg, width=max(2, s / 11), capstyle="round")
+    r = max(1.2, s / 22)
+    cv.create_oval(cx - r, cy + 2.3 * u - r, cx + r, cy + 2.3 * u + r, fill=bg, outline="")
+
+
+def _help(cv, cx, cy, s, c, font=None):
+    """A question mark in a ring."""
+    r = s * 0.42
+    cv.create_oval(cx - r, cy - r, cx + r, cy + r, fill=c, outline="")
+    cv.create_text(cx, cy + s * 0.02, text="?", fill=_bg(cv), font=font or ("Helvetica", max(8, int(s * 0.5)), "bold"))
+
+
 def draw(cv, name, cx, cy, size, color, small_font=None, halo=False):
     if halo:  # a soft disc behind the icon
         r = size * 0.72
@@ -254,5 +283,11 @@ def draw(cv, name, cx, cy, size, color, small_font=None, halo=False):
         _semi(cv, cx, cy, size, color)
     elif name == "blink":
         _blink(cv, cx, cy, size, color)
+    elif name == "home":
+        _home(cv, cx, cy, size, color)
+    elif name == "alert":
+        _alert(cv, cx, cy, size, color)
+    elif name == "help":
+        _help(cv, cx, cy, size, color, small_font)
     elif name in ("truck", "suv", "car", "van", "vehicle"):
         _body(cv, cx, cy, size, color, "truck" if name == "vehicle" else name)

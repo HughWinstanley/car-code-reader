@@ -58,6 +58,12 @@ LEVELS = {  # urgency -> (bar color, pill background, pill text color, words)
 }
 LEVEL_ORDER = {"high": 0, "medium": 1, "low": 2, "past": 3}
 
+# The colors used for the pictures on Home; the other pages and the side menu use the same ones.
+TINT = {"engine": "#E08A00", "safety": "#D9362B", "scan": "#6C4BD1", "gauge": "#0F8B8D", "smog": "#1E8A4A",
+        "vehicle": "#1F6FD1", "semi": "#B4532A", "old": "#7A5A2E", "home": "#222222", "help": "#5E7488"}
+PAGE_ICON = {"Home": ("home", "home"), "Problems": ("alert", "engine"), "Live data": ("gauge", "gauge"),
+             "Smog check": ("smog", "smog"), "Vehicle": ("vehicle", "vehicle"), "Help": ("help", "help")}
+
 _FONTS = {}
 
 
@@ -195,6 +201,9 @@ class Lamp(tk.Canvas):
         self.delete("all")
         core, _soft, glyph = self.STATES[self.state]
         s = self.size
+        if self.state == "off":  # not connected yet: the check-engine picture from the Home page
+            icons.draw(self, "engine", s / 2, s / 2, s * 0.6, TINT["engine"], halo=True)
+            return
         if self.state != "off" and (self.state != "busy" or self._pulse):
             icons.glow(self, s / 2, s / 2, s / 2 - 1, core, steps=14, strength=0.6)
         m = s * 0.2
@@ -573,7 +582,7 @@ class App:
         tk.Frame(body, bg=C["line"], width=1).pack(side="left", fill="y")
         self.nav = {}
         for name in self.PAGES:
-            item = tk.Canvas(side, width=176, height=42, bg=C["side"], highlightthickness=0, cursor="hand2")
+            item = tk.Canvas(side, width=176, height=46, bg=C["side"], highlightthickness=0, cursor="hand2")
             item.pack(padx=12, pady=2, anchor="w")
             bind_click(item, lambda n=name: self.show_page(n))
             item.bind("<Enter>", lambda e, n=name: self._nav_draw(n, hover=True))
@@ -610,20 +619,54 @@ class App:
         cv = self.nav[name]
         cv.delete("all")
         sel = name == getattr(self, "nav_selected", "")
-        if sel or hover:
-            icons.rounded_rect(cv, 0, 1, 175, 41, 21, fill="#000000" if sel else C["hover"], outline="")
-        cv.create_text(20, 21, text=name, anchor="w", fill="#FFFFFF" if sel else "#000000",
-                       font=F(14, "bold" if sel else "normal"))
+        cv.surface = C["side"]
+        if sel:  # looks like a Home tile with the pointer on it: white card, black edge
+            icons.rounded_rect(cv, 2, 2, 174, 44, 14, fill="#FFFFFF", outline="#000000", width=2)
+        elif hover:
+            icons.rounded_rect(cv, 2, 2, 174, 44, 14, fill=C["hover"], outline="")
+            cv.surface = C["hover"]
+        icon, tint = PAGE_ICON.get(name, ("scan", "scan"))
+        icons.draw(cv, icon, 26, 23, 19, TINT[tint], F(9, "bold"), halo=True)
+        cv.create_text(48, 23, text=name, anchor="w", fill="#000000", font=F(14, "bold" if sel else "normal"))
 
-    def _page_title(self, parent, title, subtitle=""):
-        tk.Label(parent, text=title, bg=C["page"], fg=C["ink"], font=F(22, "bold"), anchor="w").pack(fill="x")
+    def _page_title(self, parent, title, subtitle="", icon=None):
+        """Page heading. With icon=(picture, color key) it gets the same round picture as the Home tiles."""
+        holder = parent
+        if icon:
+            holder = tk.Frame(parent, bg=C["page"])
+            holder.pack(fill="x", pady=(0, 16))
+            cv = tk.Canvas(holder, width=76, height=76, bg=C["page"], highlightthickness=0)
+            cv.pack(side="left", padx=(0, 16))
+            icons.draw(cv, icon[0], 38, 38, 46, TINT[icon[1]], F(10, "bold"), halo=True)
+            holder = tk.Frame(holder, bg=C["page"])
+            holder.pack(side="left", fill="x", expand=True)
+        tk.Label(holder, text=title, bg=C["page"], fg=C["ink"], font=F(24 if icon else 22, "bold"),
+                 anchor="w").pack(fill="x")
         if subtitle:
-            sub = tk.Label(parent, text=subtitle, bg=C["page"], fg=C["muted"], font=F(13), anchor="w",
+            sub = tk.Label(holder, text=subtitle, bg=C["page"], fg=C["muted"], font=F(13), anchor="w",
                            justify="left")
-            sub.pack(fill="x", pady=(2, 14))
+            sub.pack(fill="x", pady=(2, 0 if icon else 14))
             wrap_on_resize(sub, 20)
             return sub
         return None
+
+    def _empty_card(self, parent, icon, title, text, button=None):
+        """A friendly card for a page with nothing to show yet: a round picture, a line and a button."""
+        card = RoundPanel(parent, pad=(22, 18), radius=22)
+        card.pack(fill="x", pady=(4, 0))
+        box = card.inner
+        cv = tk.Canvas(box, width=84, height=84, bg=C["panel"], highlightthickness=0)
+        cv.pack(side="left", padx=(0, 18))
+        icons.draw(cv, icon[0], 42, 42, 50, TINT[icon[1]], F(10, "bold"), halo=True)
+        col = tk.Frame(box, bg=C["panel"])
+        col.pack(side="left", fill="x", expand=True)
+        tk.Label(col, text=title, bg=C["panel"], fg=C["ink"], font=F(16, "bold"), anchor="w").pack(fill="x")
+        t = tk.Label(col, text=text, bg=C["panel"], fg=C["muted"], font=F(13), anchor="w", justify="left")
+        t.pack(fill="x", pady=(2, 0))
+        wrap_on_resize(t, 150)
+        if button:
+            PillButton(col, button[0], button[1], kind="primary").pack(anchor="w", pady=(10, 0))
+        return card
 
     # --- Home page ---------------------------------------------------------------------------
     def _build_home(self):
@@ -634,8 +677,7 @@ class App:
         self.home_vehicle = tk.Frame(page, bg=C["page"])
         self.home_vehicle.pack(fill="x", pady=(10, 18))
         s = 64
-        tint = {"engine": "#E08A00", "safety": "#D9362B", "scan": "#6C4BD1", "gauge": "#0F8B8D",
-                "smog": "#1E8A4A", "vehicle": "#1F6FD1", "semi": "#B4532A", "old": "#7A5A2E"}
+        tint = TINT
 
         def art(name, key):
             return lambda cv, x, y: icons.draw(cv, name, x, y, s, tint[key], F(int(s * 0.17), "bold"), halo=True)
@@ -686,6 +728,15 @@ class App:
                                "their make, and the app reads codes either way.", bg=C["page"], fg=C["muted"],
                      font=F(13), anchor="w", justify="left", wraplength=640).pack(side="left")
             LinkLabel(box, "Choose vehicle", self.open_picker).pack(side="left", padx=10)
+
+    def open_live_connect(self):
+        """Connect from the Live data page, then start the readings."""
+        self._after_scan_hook = lambda: (self.current_page == "Live data" and not self.live_running and self.elm
+                                         and self.toggle_live())
+        self.connect()
+
+    def smog_connect(self):
+        self.connect()  # the scan after connecting reads the smog tests too
 
     def open_live(self):
         self.show_page("Live data")
@@ -1291,6 +1342,8 @@ class App:
             self._apply_chosen()
             self.scanned, self.items, self.modules = False, [], []
             self.refresh_problems()
+            if not self.live_running:
+                self._live_empty()
             self.scan(kind=self.scan_kind)  # straight into the scan that was asked for
 
         self.lamp.set("busy")
@@ -1309,6 +1362,7 @@ class App:
         self._show_info({})
         self.refresh_problems()
         self.refresh_smog()
+        self.root.after(300, lambda: self.live_running or self._live_empty())
 
     def _gather_info(self, elm):
         if elm.is_j1939:
@@ -1517,7 +1571,7 @@ class App:
     # --- Live data page ----------------------------------------------------------------------
     def _build_live(self):
         page = tk.Frame(self.main, bg=C["page"])
-        self._page_title(page, "Live data", "What the engine computer sees right now. Values update about "
+        self._page_title(page, "Live data", icon=PAGE_ICON["Live data"], subtitle="What the engine computer sees right now. Values update about "
                                             "once a second.")
         bar = tk.Frame(page, bg=C["page"])
         bar.pack(fill="x")
@@ -1534,8 +1588,14 @@ class App:
 
     def _live_empty(self):
         self.tiles_area.clear()
-        tk.Label(self.tiles_area.inner, text="Connect to the vehicle, then click Start live data.",
-                 bg=C["page"], fg=C["muted"], font=F(13), anchor="w").pack(fill="x")
+        if self.elm:
+            self._empty_card(self.tiles_area.inner, PAGE_ICON["Live data"], "Ready when you are",
+                             "Click Start live data to watch speed, RPM, temperatures and more, updated every "
+                             "second.", ("Start live data", self.toggle_live))
+        else:
+            self._empty_card(self.tiles_area.inner, PAGE_ICON["Live data"], "Not connected yet",
+                             "Plug the adapter in, turn the key to ON, then connect to see live readings.",
+                             ("Connect", self.open_live_connect))
 
     def _make_tiles(self, entries):
         """entries: [(key, name)]"""
@@ -1650,7 +1710,7 @@ class App:
     # --- Smog check page -----------------------------------------------------------------------
     def _build_smog(self):
         page = tk.Frame(self.main, bg=C["page"])
-        self._page_title(page, "Smog check", "Before an emissions inspection, the vehicle has to finish its own "
+        self._page_title(page, "Smog check", icon=PAGE_ICON["Smog check"], subtitle="Before an emissions inspection, the vehicle has to finish its own "
                                              "self-tests. Here's where they stand.")
         bar = tk.Frame(page, bg=C["page"])
         bar.pack(fill="x")
@@ -1676,8 +1736,13 @@ class App:
         inner = self.smog_area.inner
         d = self.readiness
         if not d or len(d) < 4:
-            tk.Label(inner, text="Connect and scan to see whether the vehicle is ready for inspection.",
-                     bg=C["page"], fg=C["muted"], font=F(13), anchor="w").pack(fill="x")
+            if getattr(self, "elm", None):
+                self._empty_card(inner, PAGE_ICON["Smog check"], "Not checked yet",
+                                 "Click Check again to read the vehicle's self-tests.", None)
+            else:
+                self._empty_card(inner, PAGE_ICON["Smog check"], "Not connected yet",
+                                 "Connect and scan to see whether the vehicle is ready for inspection.",
+                                 ("Connect", self.smog_connect))
             return
         mil_on, count, diesel, rows = decode_readiness(d)
         year = self.vehicle.get("year", "-")
@@ -1721,7 +1786,8 @@ class App:
     # --- Vehicle page ---------------------------------------------------------------------------
     def _build_vehicle(self):
         page = tk.Frame(self.main, bg=C["page"])
-        self._page_title(page, "Vehicle", "What the vehicle and adapter report about themselves.")
+        self._page_title(page, "Vehicle", "What the vehicle and adapter report about themselves.",
+                         icon=PAGE_ICON["Vehicle"])
         card = RoundPanel(page, pad=(24, 18))
         card.pack(fill="x")
         box = card.inner
@@ -1763,7 +1829,7 @@ class App:
     # --- Help page --------------------------------------------------------------------------------
     def _build_help(self):
         page = tk.Frame(self.main, bg=C["page"])
-        self._page_title(page, "Help")
+        self._page_title(page, "Help", "Getting codes off your vehicle in five steps.", icon=PAGE_ICON["Help"])
         steps = [
             "Plug the adapter into the OBD port under the dashboard, near the steering column.",
             "Turn the key to ON. The engine can be off or running.",
@@ -1771,13 +1837,20 @@ class App:
             "Click any problem to see what it means, how urgent it is, and what usually fixes it.",
             "To clear codes, turn the engine off and leave the key on first.",
         ]
-        box = tk.Frame(page, bg=C["page"])
-        box.pack(fill="x")
+        card = RoundPanel(page, pad=(18, 12), radius=22)
+        card.pack(fill="x")
+        box = card.inner
+        box.columnconfigure(1, weight=1)
+        colors = [TINT[k] for k in ("vehicle", "engine", "scan", "safety", "smog")]
         for i, s in enumerate(steps, 1):
-            tk.Label(box, text=f"{i}.", bg=C["page"], fg=C["ink"], font=F(14, "bold")).grid(
-                row=i, column=0, sticky="nw", pady=3)
-            tk.Label(box, text=s, bg=C["page"], fg=C["ink"], font=F(14), anchor="w", justify="left").grid(
-                row=i, column=1, sticky="w", padx=(8, 0), pady=3)
+            dot = tk.Canvas(box, width=34, height=34, bg=C["panel"], highlightthickness=0)
+            dot.grid(row=i, column=0, sticky="nw", pady=5)
+            col = colors[(i - 1) % len(colors)]
+            dot.create_oval(2, 2, 32, 32, fill=icons.blend("#FFFFFF", col, 0.15), outline="")
+            dot.create_text(17, 17, text=str(i), fill=col, font=F(14, "bold"))
+            lbl = tk.Label(box, text=s, bg=C["panel"], fg=C["ink"], font=F(14), anchor="w", justify="left")
+            lbl.grid(row=i, column=1, sticky="w", padx=(12, 0), pady=5)
+            wrap_on_resize(lbl, 120)
         tips = tk.Label(page, bg=C["page"], fg=C["muted"], font=F(13), anchor="w", justify="left", text=(
             "Best adapter: OBDLink EX (USB). It reaches every OBD-II language plus Ford's second network.\n"
             "Something not working right? Open the adapter log below, copy it, and send it to whoever "

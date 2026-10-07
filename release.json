@@ -1,11 +1,11 @@
 {
-  "version": "2.10",
-  "notes": "White top bar with a black title.",
+  "version": "2.11",
+  "notes": "Every page now matches Home: colored pictures in the side menu, page headings and empty pages.",
   "files": {
-    "car_code_reader.py": "e44cff869e9f2035a5ee6a6dda69c64ecc24f71cab6c98009533e049917c7c3a",
+    "car_code_reader.py": "31de4ed8d7b8b8cab242f24a81f3617315a2a3f1fa633112cf8d718cc142d460",
     "obd_core.py": "4fcbbea157c8b6ba0d6caf493d138297eba9003cd501c6c205f89994f3205cb5",
     "dtc_database.py": "a1a338f2f1f5645585eb41feffbbe0610a0ef6a53ac10a407ea3bc901c70390c",
-    "icons.py": "3e5c45919ee6779df8024c01672b23fc26b3bbe43a3f0daa9f3d3ee3be6dd3e6",
+    "icons.py": "d145cfee5871c8fc16ddeb81c7c9497ffd553e949d4e6d3cee0d248050864f14",
     "vehicles.py": "88e1fa2299ea36901b8d020531e9184cb94f583b9224cc6b9fc566ab922d49a8",
     "updater.py": "30064db038c363b2e17a0d2585784ac502a5a96eeac7bb02d780e492504f3117",
     "j1939.py": "3f9db2423781380ede9f4f40d40037383cf978bc46c265cfb6dbed242801e360",
