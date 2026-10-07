@@ -206,7 +206,7 @@ def _body(cv, cx, cy, s, c, kind):
 def draw(cv, name, cx, cy, size, color, small_font=None, halo=False):
     if halo:  # a soft disc behind the icon
         r = size * 0.72
-        cv.create_oval(cx - r, cy - r, cx + r, cy + r, fill=blend(_bg(cv), color, 0.06), outline="")
+        cv.create_oval(cx - r, cy - r, cx + r, cy + r, fill=blend(_bg(cv), color, 0.13), outline="")
     if name == "engine":
         _engine(cv, cx, cy, size, color)
     elif name == "abs":

@@ -596,25 +596,29 @@ class App:
         self.update_bar = self.update_bar_card.inner
         self.home_vehicle = tk.Frame(page, bg=C["page"])
         self.home_vehicle.pack(fill="x", pady=(10, 18))
-        s, ink, amber = 64, "#000000", "#000000"
+        s = 64
+        tint = {"engine": "#E08A00", "safety": "#D9362B", "scan": "#6C4BD1", "gauge": "#0F8B8D",
+                "smog": "#1E8A4A", "vehicle": "#1F6FD1"}
 
-        def art(name, color=ink):
-            return lambda cv, x, y: icons.draw(cv, name, x, y, s, color, F(int(s * 0.17), "bold"), halo=True)
+        def art(name, key):
+            return lambda cv, x, y: icons.draw(cv, name, x, y, s, tint[key], F(int(s * 0.17), "bold"), halo=True)
 
         def both(cv, x, y):
-            cv.create_oval(x - s * 1.15, y - s * 0.72, x + s * 1.15, y + s * 0.72, fill="#F3F3F3", outline="")
-            icons.draw(cv, "abs", x - s * 0.5, y, s * 0.85, "#000000", F(int(s * 0.14), "bold"))
-            icons.draw(cv, "airbag", x + s * 0.5, y, s * 0.85, "#000000")
+            red = tint["safety"]
+            cv.create_oval(x - s * 1.15, y - s * 0.72, x + s * 1.15, y + s * 0.72,
+                           fill=icons.blend("#FFFFFF", red, 0.13), outline="")
+            icons.draw(cv, "abs", x - s * 0.5, y, s * 0.85, red, F(int(s * 0.14), "bold"))
+            icons.draw(cv, "airbag", x + s * 0.5, y, s * 0.85, red)
 
         tile_grid(page, [
-            ("Engine codes", "Check-engine and transmission codes", art("engine", amber),
+            ("Engine codes", "Check-engine and transmission codes", art("engine", "engine"),
              lambda: self.start_scan("engine")),
             ("ABS and airbag", "Brake and airbag warning lights", both, lambda: self.start_scan("safety")),
-            ("Full scan", "Everything at once", art("scan"), lambda: self.start_scan("all")),
-            ("Live data", "Engine readings in real time", art("gauge"), self.open_live),
-            ("Smog check", "Ready for an emissions test?", art("smog"),
+            ("Full scan", "Everything at once", art("scan", "scan"), lambda: self.start_scan("all")),
+            ("Live data", "Engine readings in real time", art("gauge", "gauge"), self.open_live),
+            ("Smog check", "Ready for an emissions test?", art("smog", "smog"),
              lambda: self.show_page("Smog check")),
-            ("Choose vehicle", "Make, model and year", art("vehicle"), self.open_picker),
+            ("Choose vehicle", "Make, model and year", art("vehicle", "vehicle"), self.open_picker),
         ], columns=3, width=236, art=100)
         return page
 
