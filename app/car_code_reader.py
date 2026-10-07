@@ -577,10 +577,9 @@ class App:
         head.pack(fill="x")
         tk.Frame(self.root, bg=C["line"], height=1).pack(fill="x")
 
-        if self._icon is not None:
-            small = self._icon.subsample(max(1, self._icon.width() // 34))
-            self._small_icon = small
-            tk.Label(head, image=small, bg=C["header"]).pack(side="left", padx=(0, 10))
+        logo = tk.Canvas(head, width=36, height=36, bg=C["header"], highlightthickness=0)
+        logo.pack(side="left", padx=(0, 10))
+        icons.app_logo(logo, 18, 18, 34)  # drawn, not a shrunken picture, so it stays sharp
         tk.Label(head, text=APP_NAME, bg=C["header"], fg="#000000", font=F(17, "bold")).pack(side="left")
         self.disconnect_btn = PillButton(head, "Disconnect", self.disconnect, kind="onheader")
         self.vehicle_lbl = tk.Label(head, text="", bg=C["header"], fg="#000000", font=F(13, "bold"))

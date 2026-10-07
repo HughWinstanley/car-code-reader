@@ -291,3 +291,32 @@ def draw(cv, name, cx, cy, size, color, small_font=None, halo=False):
         _help(cv, cx, cy, size, color, small_font)
     elif name in ("truck", "suv", "car", "van", "vehicle"):
         _body(cv, cx, cy, size, color, "truck" if name == "vehicle" else name)
+
+
+# --- The app's own logo -----------------------------------------------------------------------
+def app_logo(cv, cx, cy, size):
+    """The Car Code Reader logo (blue tile with an OBD-II plug), drawn with shapes so it stays sharp."""
+    s = size
+    x0, y0, x1, y1 = cx - s / 2, cy - s / 2, cx + s / 2, cy + s / 2
+    r = s * 0.23
+    top, bottom = "#1D3C78", "#2689A2"
+    steps = max(12, int(s))
+    for i in range(steps):  # top-to-bottom shading, one thin band at a time, kept inside the rounded corners
+        ya, yb = y0 + s * i / steps, y0 + s * (i + 1) / steps
+        ym = (ya + yb) / 2
+        dy = max(0.0, (y0 + r) - ym, ym - (y1 - r))
+        inset = r - math.sqrt(max(0.0, r * r - dy * dy)) if dy else 0
+        cv.create_rectangle(x0 + inset, ya, x1 - inset, yb + 0.6, fill=blend(top, bottom, i / (steps - 1)),
+                            outline="")
+    # the plug
+    tw, bw, ty, by = s * 0.33, s * 0.24, cy - s * 0.215, cy + s * 0.08
+    cv.create_polygon(cx - tw, ty, cx + tw, ty, cx + bw, by, cx - bw, by, fill="#0F1C2E", outline="#FFFFFF",
+                      width=max(1.0, s * 0.035), joinstyle="round")
+    yellow = "#F6C443"
+    pw, ph = s * 0.034, s * 0.06
+    for row, (yy, half, n) in enumerate(((cy - s * 0.13, s * 0.255, 8), (cy - s * 0.025, s * 0.205, 8))):
+        for k in range(n):
+            px = cx - half + (2 * half) * k / (n - 1)
+            cv.create_rectangle(px - pw / 2, yy - ph / 2, px + pw / 2, yy + ph / 2, fill=yellow, outline="")
+    d = s * 0.048
+    cv.create_oval(cx - d, cy + s * 0.2 - d, cx + d, cy + s * 0.2 + d, fill=yellow, outline="")
