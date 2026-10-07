@@ -7,7 +7,7 @@ Writes out_dir/release.json and out_dir/app/<files>; publish out_dir to the GitH
 """
 import hashlib, json, os, shutil, sys
 
-FILES = ["car_code_reader.py", "obd_core.py", "dtc_database.py", "icons.py", "vehicles.py", "updater.py", "j1939.py", "obd1.py", "maker_codes.py", "recalls.py", "service_guides.py",
+FILES = ["car_code_reader.py", "obd_core.py", "dtc_database.py", "icons.py", "vehicles.py", "updater.py", "j1939.py", "obd1.py", "maker_codes.py", "recalls.py", "service_guides.py", "advanced.py", "history.py", "report.py",
          "icon.png"]
 
 def main():

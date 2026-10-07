@@ -22,7 +22,8 @@ else:
     HERE = os.path.dirname(os.path.abspath(__file__))
 REQUIRED = ("car_code_reader.py", "obd_core.py", "dtc_database.py", "version.py")
 APP_MODULES = ("car_code_reader", "obd_core", "dtc_database", "icons", "vehicles", "version", "updater",
-               "j1939", "obd1", "maker_codes", "recalls", "service_guides")
+               "j1939", "obd1", "maker_codes", "recalls", "service_guides",
+               "advanced", "history", "report")
 
 
 def _bundle_hints():  # pragma: no cover - never called
@@ -30,6 +31,8 @@ def _bundle_hints():  # pragma: no cover - never called
     left out of the frozen part on purpose, so the build can't see these imports by itself.)"""
     import csv, ctypes, datetime, hashlib, json, math, queue, shutil, socket, ssl, subprocess  # noqa
     import tempfile, threading, time, urllib.parse, urllib.request, webbrowser  # noqa
+    import html, html.parser, collections, statistics, zipfile, uuid, base64, struct, itertools  # noqa
+    import functools, random, string, textwrap, decimal, fractions, copy, glob, platform  # noqa
     import tkinter, tkinter.font, tkinter.ttk, tkinter.messagebox, tkinter.filedialog  # noqa
     import tkinter.scrolledtext  # noqa
     import serial, serial.tools.list_ports, serial.tools.list_ports_osx, serial.serialposix  # noqa

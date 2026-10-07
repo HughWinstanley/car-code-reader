@@ -276,6 +276,18 @@ def _wrench(cv, cx, cy, s, c):
     cv.create_polygon(hx, hy, hx + 3 * u, hy - 0.6 * u - m, hx + 0.6 * u + m, hy - 3 * u, fill=bg, outline=bg)
 
 
+def _history(cv, cx, cy, s, c):
+    """A clock with a turning-back arrow: scan history."""
+    u = s / 10
+    w = max(2, s / 13)
+    r = 4 * u
+    cv.create_arc(cx - r, cy - r, cx + r, cy + r, start=-60, extent=300, style="arc", outline=c, width=w)
+    cv.create_polygon(cx + r * 0.5 - 1.6 * u, cy - r * 0.87 - 0.2 * u, cx + r * 0.5 + 1.4 * u, cy - r * 0.87 - 1.4 * u,
+                      cx + r * 0.5 + 0.6 * u, cy - r * 0.87 + 1.6 * u, fill=c, outline=c)
+    cv.create_line(cx, cy - 2.4 * u, cx, cy, cx + 1.8 * u, cy + 1.2 * u, fill=c, width=w, capstyle="round",
+                   joinstyle="round")
+
+
 def draw(cv, name, cx, cy, size, color, small_font=None, halo=False):
     if halo:  # a soft disc behind the icon
         r = size * 0.72
@@ -300,6 +312,8 @@ def draw(cv, name, cx, cy, size, color, small_font=None, halo=False):
         _home(cv, cx, cy, size, color)
     elif name == "alert":
         _alert(cv, cx, cy, size, color)
+    elif name == "history":
+        _history(cv, cx, cy, size, color)
     elif name == "wrench":
         _wrench(cv, cx, cy, size, color)
     elif name == "help":

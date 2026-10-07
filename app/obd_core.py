@@ -60,7 +60,46 @@ PIDS = {
     0x1F: ("Time since engine start", lambda d: d[0] * 256 + d[1], "s"),
     0x21: ("Distance driven with light on", lambda d: d[0] * 256 + d[1], "km"),
     0x31: ("Distance since codes cleared", lambda d: d[0] * 256 + d[1], "km"),
+    # more standard (SAE J1979) readings, shown when the vehicle supports them
+    0x0A: ("Fuel pressure", lambda d: d[0] * 3, "kPa"),
+    0x14: ("O2 sensor voltage, bank 1 sensor 1", lambda d: d[0] / 200, "V"),
+    0x15: ("O2 sensor voltage, bank 1 sensor 2", lambda d: d[0] / 200, "V"),
+    0x16: ("O2 sensor voltage, bank 1 sensor 3", lambda d: d[0] / 200, "V"),
+    0x18: ("O2 sensor voltage, bank 2 sensor 1", lambda d: d[0] / 200, "V"),
+    0x19: ("O2 sensor voltage, bank 2 sensor 2", lambda d: d[0] / 200, "V"),
+    0x23: ("Fuel rail pressure", lambda d: (d[0] * 256 + d[1]) * 10, "kPa"),
+    0x2C: ("Commanded EGR", lambda d: d[0] * 100 / 255, "%"),
+    0x2E: ("Commanded EVAP purge", lambda d: d[0] * 100 / 255, "%"),
+    0x30: ("Warm-ups since codes cleared", lambda d: d[0], "count"),
+    0x33: ("Barometric pressure", lambda d: d[0], "kPa"),
+    0x3C: ("Catalyst temperature, bank 1", lambda d: (d[0] * 256 + d[1]) / 10 - 40, "°C"),
+    0x3D: ("Catalyst temperature, bank 2", lambda d: (d[0] * 256 + d[1]) / 10 - 40, "°C"),
+    0x43: ("Absolute engine load", lambda d: (d[0] * 256 + d[1]) * 100 / 255, "%"),
+    0x44: ("Commanded air/fuel ratio (lambda)", lambda d: (d[0] * 256 + d[1]) * 2 / 65536, "λ"),
+    0x45: ("Relative throttle position", lambda d: d[0] * 100 / 255, "%"),
+    0x46: ("Outside air temperature", lambda d: d[0] - 40, "°C"),
+    0x49: ("Accelerator pedal position", lambda d: d[0] * 100 / 255, "%"),
+    0x4C: ("Commanded throttle", lambda d: d[0] * 100 / 255, "%"),
+    0x4D: ("Time run with light on", lambda d: d[0] * 256 + d[1], "min"),
+    0x4E: ("Time since codes cleared", lambda d: d[0] * 256 + d[1], "min"),
+    0x52: ("Ethanol in fuel", lambda d: d[0] * 100 / 255, "%"),
+    0x5E: ("Fuel use rate", lambda d: (d[0] * 256 + d[1]) / 20, "L/h"),
 }
+
+
+def us_value(v, unit):
+    """Metric value -> (value, unit) the way the app shows it in the US."""
+    if unit == "°C":
+        return v * 9 / 5 + 32, "°F"
+    if unit == "km/h":
+        return v * 0.621371, "mph"
+    if unit == "km":
+        return v * 0.621371, "miles"
+    if unit == "kPa":
+        return v * 0.145038, "psi"
+    if unit == "L/h":
+        return v * 0.264172, "gal/h"
+    return v, unit
 
 
 def format_value(v, unit):
@@ -80,6 +119,16 @@ def format_value(v, unit):
         return f"{v:.2f} V"
     if unit == "g/s":
         return f"{v:.1f} g/s"
+    if unit == "count":
+        return f"{v:.0f}"
+    if unit == "min":
+        return f"{int(v) // 60} h {int(v) % 60} min" if v >= 60 else f"{v:.0f} min"
+    if unit == "L/h":
+        return f"{v * 0.264172:.2f} gal/h   ({v:.1f} L/h)"
+    if unit == "λ":
+        return f"{v:.3f} λ"
+    if unit == "V" and v < 2:
+        return f"{v:.3f} V"
     return f"{v:.1f} {unit}"
 
 
@@ -411,6 +460,29 @@ class DemoTransport:
             return self._frames(E, b"\x44") + self._frames(T, b"\x44")
         if mode == 0x09 and len(req) == 2 and req[1] == 0x02:
             return self._frames(E, b"\x49\x02\x01" + self.VIN.encode())
+        if mode == 0x06 and len(req) == 2:  # self-test results
+            sup = {0x00: "80000001", 0x20: "80000001", 0x40: "00000001", 0x60: "00000001", 0x80: "00000001",
+                   0xA0: "70000000"}
+            rec = {0x01: "810B01F400C80320",                          # O2 sensor: 0.500 V (0.200-0.800)
+                   0x21: "831E3A980000639C",                          # catalyst: 0.458 (0-0.778)
+                   0xA2: "0B24000500000FFF" + "0C24000C00000FFF",     # cylinder 1: 5 avg, 12 this drive
+                   0xA3: "0B24000000000FFF" + "0C24000000000FFF",
+                   0xA4: "0B24000000000FFF" + "0C24000100000FFF"}
+            if req[1] in sup:
+                return self._frames(E, bytes([0x46, req[1]]) + bytes.fromhex(sup[req[1]]))
+            if req[1] in rec:
+                h = rec[req[1]]  # each record: MID, TID, unit, value, minimum, maximum
+                recs = b"".join(bytes([req[1]]) + bytes.fromhex(h[i:i + 16]) for i in range(0, len(h), 16))
+                return self._frames(E, b"\x46" + recs)
+            return ["NO DATA"]
+        if mode == 0x09 and len(req) == 2 and req[1] in (0x04, 0x06, 0x08, 0x0A):
+            data = {0x04: b"\x01" + b"DEMO-CAL-12A4-B7".ljust(16, b"\x00"),
+                    0x06: b"\x01" + bytes.fromhex("1A2B3C4D"),
+                    0x08: b"\x14" + b"".join(n.to_bytes(2, "big") for n in
+                                               (212, 640, 98, 205, 0, 0, 120, 205, 0, 0, 77, 190, 0, 0, 31, 140,
+                                                110, 205, 0, 0)),
+                    0x0A: b"\x01" + b"ECM\x00-EngineControl".ljust(20, b"\x00")}[req[1]]
+            return self._frames(E, bytes([0x49, req[1]]) + data)
         if mode == 0x22 and bytes(req[1:3]) == b"\x1e\x1c":  # Ford transmission fluid temperature
             t = 82 + 6 * math.sin((time.time() - self._t0) / 20)
             return self._frames(E, b"\x62\x1e\x1c" + int(t * 16).to_bytes(2, "big", signed=True))
@@ -426,7 +498,7 @@ class DemoTransport:
             return bytes(max(0, min(255, int(v))) for v in vals)
 
         table = {
-            0x00: bytes.fromhex("BE3FA013"), 0x20: bytes.fromhex("00020001"), 0x40: bytes.fromhex("40000000"),
+            0x00: bytes.fromhex("BE3FB013"), 0x20: bytes.fromhex("00020001"), 0x40: bytes.fromhex("40000000"),
             0x01: b(0x82 if not self._cleared else 0x00, 0x07, 0xE5, 0xE5 if self._cleared else 0x04),
             0x03: b(2, 0), 0x04: b(25 + rpm / 100), 0x05: b(coolant + 40),
             0x06: b(128 + 6 * math.sin(t)), 0x07: b(138), 0x0B: b(30 + rpm / 60),
@@ -434,6 +506,7 @@ class DemoTransport:
             0x0F: b(28 + 40), 0x10: int((2.5 + rpm / 250) * 100).to_bytes(2, "big"),
             0x11: b((15 + rpm / 100) * 255 / 100), 0x13: b(0x33), 0x1C: b(1),
             0x1F: int(t).to_bytes(2, "big"), 0x2F: b(0.62 * 255), 0x42: (14100).to_bytes(2, "big"),
+            0x14: b(90 + 70 * math.sin(t * 3), 255),
         }
         return table.get(pid)
 

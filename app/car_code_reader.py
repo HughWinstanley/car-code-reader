@@ -24,14 +24,17 @@ from tkinter import ttk, messagebox, filedialog
 from tkinter.scrolledtext import ScrolledText
 
 from obd_core import (CONN_SERIAL, CONN_WIFI, CONN_DEMO, CONN_DEMO_OLD, CONN_DEMO_SEMI, ECU_NAMES, MS, PIDS,
-                      EXTENDED, decode_readiness, format_pid, format_value, list_ports, make_from_vin, open_adapter,
+                      EXTENDED, decode_readiness, format_pid, format_value, list_ports, make_from_vin, open_adapter, us_value,
                       year_from_vin)
 from dtc_database import decode_dtc_bytes, describe_dtc, severity, uds_status_text, why_it_matters
 import icons
 import j1939
+import advanced
+import history
 import maker_codes
 import obd1
 import recalls
+import report
 import service_guides
 import updater
 import vehicles
@@ -61,12 +64,28 @@ LEVELS = {  # urgency -> (bar color, pill background, pill text color, words)
 }
 LEVEL_ORDER = {"high": 0, "medium": 1, "low": 2, "past": 3}
 
+# How to get each smog-check self-test to run (general drive cycles; exact steps vary by vehicle).
+DRIVE_CYCLES = {
+    "Catalyst": "once fully warmed up, drive at a steady 40-55 mph for about 5 minutes.",
+    "Heated catalyst": "once fully warmed up, drive at a steady 40-55 mph for about 5 minutes.",
+    "Oxygen sensor": "after warming up, drive at a steady 30-45 mph for 2-3 minutes, then idle for 30 seconds.",
+    "Oxygen sensor heater": "let the vehicle sit off for at least 8 hours, then start it and idle for 2 minutes.",
+    "Evaporative system (EVAP)": "keep the tank between 1/4 and 3/4 full, park overnight, then start it cold and "
+                                 "drive normally. This one can take several days.",
+    "EGR system": "after warming up, make a few gentle slow-downs from 50 mph to 20 mph without braking hard.",
+    "Secondary air system": "start the engine cold (after sitting overnight) and let it idle for 2 minutes.",
+    "Misfire": "runs all the time while driving.",
+    "Fuel system": "runs all the time while driving.",
+    "Comprehensive components": "runs all the time while driving.",
+}
+
 # The colors used for the pictures on Home; the other pages and the side menu use the same ones.
 TINT = {"engine": "#E08A00", "safety": "#D9362B", "scan": "#6C4BD1", "gauge": "#0F8B8D", "smog": "#1E8A4A",
         "vehicle": "#1F6FD1", "semi": "#B4532A", "old": "#7A5A2E", "home": "#222222", "help": "#5E7488",
-        "service": "#B03E6E"}
+        "service": "#B03E6E", "history": "#2C5C9A", "battery": "#3A9A56"}
 PAGE_ICON = {"Home": ("home", "home"), "Problems": ("alert", "engine"), "Live data": ("gauge", "gauge"),
-             "Smog check": ("smog", "smog"), "Vehicle": ("vehicle", "vehicle"), "Service": ("wrench", "service"),
+             "Smog check": ("smog", "smog"), "Tests": ("scan", "scan"), "Vehicle": ("vehicle", "vehicle"),
+             "Service": ("wrench", "service"), "History": ("history", "history"),
              "Help": ("help", "help")}
 
 _FONTS = {}
@@ -330,6 +349,79 @@ class RoundPanel(tk.Canvas):
         self.tag_lower("card")
 
 
+class LiveGraph(tk.Canvas):
+    """Line graph of up to 4 live readings over the last 90 seconds. Each line has its own scale."""
+    COLORS = ["#E08A00", "#1F6FD1", "#1E8A4A", "#6C4BD1"]
+    SPAN = 90.0
+
+    def __init__(self, parent):
+        super().__init__(parent, height=230, bg=C["page"], highlightthickness=0)
+        self.series = {}   # key -> {"name", "unit", "points": [(t, v)]}
+        self._job = None
+        self.bind("<Configure>", lambda e: self.redraw())
+
+    def set_keys(self, keys, names):
+        for k in list(self.series):
+            if k not in keys:
+                del self.series[k]
+        for k in keys:
+            self.series.setdefault(k, {"name": names.get(k, str(k)), "unit": "", "points": []})
+        self.redraw()
+
+    def add(self, key, value, unit):
+        if key in self.series:
+            sr = self.series[key]
+            sr["unit"] = unit
+            sr["points"].append((time.time(), value))
+            cut = time.time() - self.SPAN
+            while sr["points"] and sr["points"][0][0] < cut:
+                sr["points"].pop(0)
+            if not self._job:
+                self._job = self.after(250, self.redraw)
+
+    def redraw(self):
+        self._job = None
+        self.delete("all")
+        w, h = self.winfo_width(), int(self["height"])
+        if w < 50:
+            return
+        icons.rounded_rect(self, 1, 1, w - 1, h - 1, 18, fill=C["panel"], outline=C["line"])
+        left, right, top, bottom = 18, w - 18, 46, h - 28
+        for i in range(5):
+            y = top + (bottom - top) * i / 4
+            self.create_line(left, y, right, y, fill="#EFEFEF")
+        now = time.time()
+        first = min((sr["points"][0][0] for sr in self.series.values() if sr["points"]), default=now)
+        span = max(15.0, min(self.SPAN, now - first))  # fill the width from the start, up to 90 seconds
+        self.create_text(left, h - 14, text=f"{int(span)} s ago", anchor="w", fill=C["muted"], font=F(11))
+        self.create_text(right, h - 14, text="now", anchor="e", fill=C["muted"], font=F(11))
+        x = left
+        for i, (key, sr) in enumerate(self.series.items()):
+            color = self.COLORS[i % len(self.COLORS)]
+            pts = sr["points"]
+            label = sr["name"]
+            if pts:
+                vals = [v for _, v in pts]
+                lo, hi = min(vals), max(vals)
+                if hi - lo < 1e-9:
+                    lo, hi = lo - 1, hi + 1
+                pad = (hi - lo) * 0.1
+                lo, hi = lo - pad, hi + pad
+                xy = []
+                for t, v in pts:
+                    xy += [right - (now - t) / span * (right - left), bottom - (v - lo) / (hi - lo) * (bottom - top)]
+                if len(xy) >= 4:
+                    self.create_line(*xy, fill=color, width=2.5, smooth=True, capstyle="round", joinstyle="round")
+                label += f": {_num(pts[-1][1])} {sr['unit']}"
+            self.create_oval(x, 18, x + 10, 28, fill=color, outline="")
+            t = self.create_text(x + 16, 23, text=label, anchor="w", fill=C["ink"], font=F(12, "bold"))
+            x = self.bbox(t)[2] + 22
+
+
+def _num(v):
+    return f"{v:.0f}" if abs(v) >= 100 else f"{v:.1f}" if abs(v) >= 10 else f"{v:.2f}"
+
+
 class Tile(tk.Canvas):
     """A rounded card drawn on one canvas: a picture, a title and one line under it. Click to use."""
 
@@ -487,7 +579,7 @@ class ProblemRow(RoundPanel):
 # The app
 # ----------------------------------------------------------------------------
 class App:
-    PAGES = ["Home", "Problems", "Live data", "Smog check", "Vehicle", "Service", "Help"]
+    PAGES = ["Home", "Problems", "Live data", "Smog check", "Tests", "Vehicle", "Service", "History", "Help"]
 
     def __init__(self, root):
         self.root = root
@@ -570,7 +662,7 @@ class App:
     def log(self, text):
         self.ui(lambda: self._append_log(text))
 
-    def run_bg(self, work, done=None, step="Working…", on_error=None):
+    def run_bg(self, work, done=None, step="Working…", on_error=None, quiet_errors=False):
         if self.busy:
             return
         self.busy = True
@@ -582,16 +674,18 @@ class App:
                 result, err = work(), None
             except Exception as e:  # noqa: BLE001 - every failure is shown to the user
                 result, err = None, e
-            self.ui(lambda: self._finish(result, err, done, on_error))
+            self.ui(lambda: self._finish(result, err, done, on_error, quiet_errors))
 
         threading.Thread(target=wrap, daemon=True).start()
 
-    def _finish(self, result, err, done, on_error=None):
+    def _finish(self, result, err, done, on_error=None, quiet=False):
         self.busy = False
         self.set_step("")
         self._update_controls()
         if err is not None and on_error:
             on_error(err)
+            if quiet:
+                return
         if err is not None:
             self._append_log(f"ERROR: {err}")
             self.refresh_problems()
@@ -639,8 +733,10 @@ class App:
             "Problems": self._build_problems(),
             "Live data": self._build_live(),
             "Smog check": self._build_smog(),
+            "Tests": self._build_tests(),
             "Vehicle": self._build_vehicle(),
             "Service": self._build_service(),
+            "History": self._build_history(),
             "Help": self._build_help(),
         }
 
@@ -656,6 +752,8 @@ class App:
             else:
                 frame.pack_forget()
         self.current_page = name
+        if name == "History" and hasattr(self, "history_area"):
+            self.refresh_history()
         if name == "Service" and hasattr(self, "service_area"):
             self.refresh_service()
         if name == "Vehicle" and hasattr(self, "recall_btn"):
@@ -1533,6 +1631,7 @@ class App:
         if self.scan_kind != "safety":
             self.readiness = ready
             self.mil_on = bool(ready[0] & 0x80) if ready else None
+        self._save_history()
         self.refresh_problems()
         self.refresh_smog()
         hook, self._after_scan_hook = getattr(self, "_after_scan_hook", None), None
@@ -1578,6 +1677,7 @@ class App:
         self.modules = [{"name": m["name"], "target": m["sa"], "dtcs": m["active"], "bus": "j1939"} for m in mods]
         self.readiness = None
         self.mil_on = any(m["lamps"].get("Check engine (malfunction) lamp") for m in mods)
+        self._save_history()
         self.refresh_problems()
         self.refresh_smog()
         hook, self._after_scan_hook = getattr(self, "_after_scan_hook", None), None
@@ -1648,7 +1748,17 @@ class App:
         self.live_btn.pack(side="left")
         self.freeze_btn = PillButton(bar, "Show freeze frame", self.read_freeze_frame)
         self.freeze_btn.pack(side="left", padx=10)
+        self.record_btn = PillButton(bar, "Record", self.toggle_record)
+        self.record_btn.pack(side="left")
+        self.record_btn.set_enabled(False)
+        tk.Label(bar, text="Click any reading to graph it", bg=C["page"], fg=C["muted"], font=F(12)).pack(
+            side="right")
         self.page_buttons = [self.freeze_btn]
+        self.graph = LiveGraph(page)
+        self.graph_keys = []      # readings being graphed (up to 4)
+        self.live_stats = {}      # key -> [low, high] in the units shown
+        self.live_last = {}       # key -> (value, unit) latest, in the units shown
+        self.recording = None     # list of rows while recording
         self.tiles_area = ScrollArea(page, C["page"])
         self.tiles_area.pack(fill="both", expand=True, pady=(16, 0))
         self.tiles = {}
@@ -1669,6 +1779,9 @@ class App:
     def _make_tiles(self, entries):
         """entries: [(key, name)]"""
         self.tiles_area.clear()
+        self.graph_keys, self.live_stats, self.live_last = [], {}, {}
+        self.graph.set_keys([], {})
+        self.graph.pack_forget()
         grid = tk.Frame(self.tiles_area.inner, bg=C["page"])
         grid.pack(fill="x")
         self.tiles = {}
@@ -1680,18 +1793,77 @@ class App:
             value.pack(fill="x")
             alt = tk.Label(tile, text="", bg=C["panel"], fg=C["muted"], font=F(12), anchor="w")
             alt.pack(fill="x")
-            tk.Label(tile, text=name, bg=C["panel"], fg=C["ink"], font=F(13), anchor="w", justify="left",
-                     wraplength=220).pack(fill="x")
-            self.tiles[pid] = (value, alt)
+            lbl = tk.Label(tile, text=name, bg=C["panel"], fg=C["ink"], font=F(13), anchor="w", justify="left",
+                           wraplength=220)
+            lbl.pack(fill="x")
+            span = tk.Label(tile, text="", bg=C["panel"], fg=C["muted"], font=F(11), anchor="w")
+            span.pack(fill="x")
+            self.tiles[pid] = (value, alt, span, card, name)
+            bind_click(card, lambda k=pid: self._toggle_graph(k), also=(tile, value, alt, lbl, span))
+            for w in (card, tile, value, alt, lbl, span):
+                w.configure(cursor="hand2")
         for col in range(3):
             grid.grid_columnconfigure(col, weight=1, uniform="tiles")
 
-    def _set_tile(self, pid, text):
+    def _set_tile(self, pid, text, value=None, unit=None):
         if pid not in self.tiles:
             return
         main, _, alt = text.partition("(")
         self.tiles[pid][0].configure(text=main.strip())
         self.tiles[pid][1].configure(text=alt.rstrip(")").strip())
+        if value is None or unit in ("s", "min", "count", "km"):
+            return
+        v, u = us_value(value, unit)
+        self.live_last[pid] = (v, u)
+        st = self.live_stats.setdefault(pid, [v, v])
+        st[0], st[1] = min(st[0], v), max(st[1], v)
+        self.tiles[pid][2].configure(text=f"Low {_num(st[0])} · High {_num(st[1])} {u}")
+        self.graph.add(pid, v, u)
+
+    def _toggle_graph(self, key):
+        if key in self.graph_keys:
+            self.graph_keys.remove(key)
+        else:
+            if len(self.graph_keys) >= 4:
+                self.graph_keys.pop(0)
+            self.graph_keys.append(key)
+        for k, t in self.tiles.items():
+            card = t[3]
+            on = k in self.graph_keys
+            card.outline = "#000000" if on else C["line"]
+            card._fit()
+            card.itemconfigure("card", width=2 if on else 1)
+        self.graph.set_keys(self.graph_keys, {k: t[4] for k, t in self.tiles.items()})
+        if self.graph_keys and not self.graph.winfo_ismapped():
+            self.graph.pack(fill="x", pady=(14, 0), before=self.tiles_area)
+        elif not self.graph_keys:
+            self.graph.pack_forget()
+
+    def toggle_record(self):
+        if self.recording is None:
+            self.recording = []
+            self.record_btn.set_text("Stop recording")
+            return
+        rows, self.recording = self.recording, None
+        self.record_btn.set_text("Record")
+        if not rows:
+            return
+        keys = [k for k in self.tiles if any(k in r[1] for r in rows)]
+        path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("Spreadsheet (CSV)", "*.csv")],
+                                            initialfile=f"drive-{datetime.datetime.now():%Y-%m-%d-%H%M}.csv")
+        if not path:
+            return
+        import csv
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            out = csv.writer(f)
+            start = rows[0][0]
+            units = {k: next((r[1][k][1] for r in rows if k in r[1]), "") for k in keys}
+            out.writerow(["Seconds"] + [f"{self.tiles[k][4]} ({units[k]})" if units[k] else self.tiles[k][4]
+                                        for k in keys])
+            for t, vals in rows:
+                out.writerow([f"{t - start:.1f}"] + [_num(vals[k][0]) if k in vals else "" for k in keys])
+        self.step_lbl.configure(text=f"Recording saved to {path}")
+        self._append_log(f"Recording saved to {path}")
 
     def toggle_live(self):
         if self.live_running:
@@ -1723,19 +1895,31 @@ class App:
                         extra[("x", did)] = (did, spec)
                 tiles = [(p, PIDS[p][0]) for p in pids] + [(k, spec[0] + " (factory)") for k, (_d, spec) in
                                                            extra.items()]
-                self.ui(lambda: self._make_tiles(tiles))
+                self.ui(lambda: (self._make_tiles(tiles), self.record_btn.set_enabled(True)))
+                def read(pid):
+                    d = elm.query_pid(1, pid)
+                    if d is not None:
+                        txt = format_pid(pid, d)
+                        try:
+                            v = PIDS[pid][1](d)
+                        except (IndexError, TypeError):
+                            v = None
+                        self.ui(lambda p=pid, t=txt, v=v: self._set_tile(p, t, v, PIDS[p][2]))
+
                 while not self.live_stop.is_set():
                     for pid in pids:
                         if self.live_stop.is_set():
                             break
-                        d = elm.query_pid(1, pid)
-                        if d is not None:
-                            txt = format_pid(pid, d)
-                            self.ui(lambda p=pid, t=txt: self._set_tile(p, t))
+                        read(pid)
+                        for g in list(self.graph_keys):  # graphed readings are read far more often
+                            if g in PIDS and g != pid and g in pids:
+                                read(g)
                     for key, (did, spec) in extra.items():
                         v = self._read_extended(elm, did, spec)
                         if v is not None:
-                            self.ui(lambda k=key, t=format_value(v, spec[2]): self._set_tile(k, t))
+                            self.ui(lambda k=key, t=format_value(v, spec[2]), v=v, u=spec[2]:
+                                    self._set_tile(k, t, v, u))
+                    self.ui(self._record_tick)
             except Exception as e:  # noqa: BLE001
                 msg = str(e)
                 self.ui(lambda: messagebox.showerror(APP_NAME, f"Live data stopped: {msg}"))
@@ -1757,7 +1941,14 @@ class App:
         lo, hi = spec[3]
         return v if lo <= v <= hi else None
 
+    def _record_tick(self):
+        if self.recording is not None:
+            self.recording.append((time.time(), dict(self.live_last)))
+
     def _live_ended(self):
+        if self.recording is not None:
+            self.toggle_record()
+        self.record_btn.set_enabled(False)
         self.live_running = False
         self.busy = False
         self._update_controls()
@@ -1876,6 +2067,12 @@ class App:
                 pill = ("Done", C["green_soft"], C["green"])
             tk.Label(row, text=pill[0], bg=pill[1], fg=pill[2], font=F(12, "bold"), padx=10, pady=3).pack(
                 side="right")
+            tip = DRIVE_CYCLES.get(rows[i][0]) if supported and incomplete else None
+            if tip:
+                t = tk.Label(box, text="How to finish it: " + tip, bg=C["panel"], fg=C["muted"], font=F(12),
+                             anchor="w", justify="left", padx=18)
+                t.pack(fill="x", pady=(0, 8))
+                wrap_on_resize(t, 80)
 
     # --- Vehicle page ---------------------------------------------------------------------------
     def _build_vehicle(self):
@@ -1966,6 +2163,7 @@ class App:
                                               "and try again.")
             return
         found, matched = res
+        self.last_recalls = found
         if not matched:
             self.recall_status.configure(text=f"The recall database doesn't list {name} under that name. Check "
                                               "on the NHTSA website instead.")
@@ -2020,6 +2218,399 @@ class App:
 
     def refresh_info(self):
         self.run_bg(lambda: self._gather_info(self.elm), self._show_info, "Reading vehicle info…")
+
+    # --- Tests page: battery test, self-test results, module info, code lookup -----------------------
+    def _build_tests(self):
+        page = tk.Frame(self.main, bg=C["page"])
+        self._page_title(page, "Tests", "Deeper checks that professional scan tools do. They only read from the "
+                                        "vehicle and never change anything.", icon=PAGE_ICON["Tests"])
+        area = ScrollArea(page, C["page"])
+        area.pack(fill="both", expand=True)
+        box = area.inner
+        self.tests_area = area
+        self.last_results = {}  # what the tests found, for the report
+
+        def section(icon, tint, title, text, button, command, needs_adapter=True):
+            card = RoundPanel(box, pad=(22, 16), radius=20)
+            card.pack(fill="x", pady=(0, 12))
+            inner = card.inner
+            top = tk.Frame(inner, bg=C["panel"])
+            top.pack(fill="x")
+            cv = tk.Canvas(top, width=54, height=54, bg=C["panel"], highlightthickness=0)
+            cv.pack(side="left", padx=(0, 14))
+            icons.draw(cv, icon, 27, 27, 32, TINT[tint], F(8, "bold"), halo=True)
+            col = tk.Frame(top, bg=C["panel"])
+            col.pack(side="left", fill="x", expand=True)
+            tk.Label(col, text=title, bg=C["panel"], fg=C["ink"], font=F(16, "bold"), anchor="w").pack(fill="x")
+            t = tk.Label(col, text=text, bg=C["panel"], fg=C["muted"], font=F(13), anchor="w", justify="left")
+            t.pack(fill="x")
+            wrap_on_resize(t, 260)
+            btn = None
+            if button:
+                btn = PillButton(top, button, command, kind="primary")
+                btn.pack(side="right", padx=(12, 0))
+                if needs_adapter:
+                    self.page_buttons.append(btn)
+            out = tk.Frame(inner, bg=C["panel"])
+            out.pack(fill="x")
+            return out, btn
+
+        self.batt_out, self.batt_btn = section(
+            "gauge", "battery", "Battery and charging test",
+            "Checks the battery at rest, how far it drops while starting, and whether the alternator charges at "
+            "idle and at 2,000 rpm. Takes about a minute.", "Start test", self.battery_test)
+        self.mode6_out, _ = section(
+            "scan", "scan", "Self-test results and misfire counts",
+            "The numbers behind each emissions self-test with its pass/fail limits, and misfire counts for each "
+            "cylinder. Most 2008 and newer vehicles.", "Read results", self.read_self_tests)
+        self.mod9_out, _ = section(
+            "vehicle", "vehicle", "Module info",
+            "Software calibration numbers for each computer, and how often each self-test has had a chance to "
+            "run.", "Read info", self.read_module_info)
+        self.lookup_out, _ = section(
+            "alert", "engine", "Look up a code",
+            "Find out what any code means, without the vehicle. Factory meanings use the vehicle you picked.",
+            None, None, needs_adapter=False)
+        row = tk.Frame(self.lookup_out, bg=C["panel"])
+        row.pack(fill="x", pady=(12, 0))
+        self.lookup_var = tk.StringVar()
+        entry = ttk.Entry(row, textvariable=self.lookup_var, width=14, font=F(15))
+        entry.pack(side="left")
+        entry.bind("<Return>", lambda e: self.lookup_code())
+        PillButton(row, "Look up", self.lookup_code, kind="primary").pack(side="left", padx=(10, 0))
+        self.lookup_result = tk.Frame(self.lookup_out, bg=C["panel"])
+        self.lookup_result.pack(fill="x")
+        return page
+
+    def _clear(self, frame):
+        for w in frame.winfo_children():
+            w.destroy()
+
+    def _line(self, parent, text, bold=False, color=None, size=13, pady=(4, 0)):
+        lbl = tk.Label(parent, text=text, bg=parent["bg"], fg=color or C["ink"], font=F(size, "bold" if bold else
+                                                                                         "normal"),
+                       anchor="w", justify="left")
+        lbl.pack(fill="x", pady=pady)
+        wrap_on_resize(lbl, 40)
+        return lbl
+
+    def _pill(self, parent, text, good):
+        bg, fg = (C["green_soft"], C["green"]) if good else (C["red_soft"], C["red"])
+        return tk.Label(parent, text=text, bg=bg, fg=fg, font=F(12, "bold"), padx=10, pady=3)
+
+    # Code lookup
+    def lookup_code(self):
+        code = re.sub(r"[^A-Za-z0-9]", "", self.lookup_var.get()).upper()
+        self._clear(self.lookup_result)
+        if not re.fullmatch(r"[PCBU][0-9A-F]{4}", code):
+            self._line(self.lookup_result, "Type a code like P0301, C0035, B1932 or U0100.", color=C["muted"],
+                       pady=(10, 0))
+            return
+        info = describe_dtc(code, self._current_make())
+        self._line(self.lookup_result, f"{code}: {info['description']}", bold=True, size=15, pady=(12, 2))
+        if info.get("factory"):
+            self._line(self.lookup_result, f"{info['factory']} factory meaning. It can differ a little by model and "
+                                           "year.", color=C["muted"])
+        if info["causes"]:
+            self._line(self.lookup_result, "Common causes", bold=True, pady=(8, 0))
+            self._line(self.lookup_result, info["causes"], pady=(0, 0))
+        for i, step in enumerate(info.get("checks") or [], 1):
+            if i == 1:
+                self._line(self.lookup_result, "How to check it", bold=True, pady=(8, 0))
+            self._line(self.lookup_result, f"{i}. {step}", pady=(2, 0))
+        self._line(self.lookup_result, as_sentences(info["category"]), color=C["muted"], pady=(8, 0))
+        row = tk.Frame(self.lookup_result, bg=C["panel"])
+        row.pack(fill="x", pady=(10, 0))
+        PillButton(row, "Search for repair info", lambda: self.lookup_online(code)).pack(side="left")
+        PillButton(row, "Repair videos", lambda: self.lookup_online(code, videos=True)).pack(side="left",
+                                                                                           padx=(10, 0))
+
+    # Self-test results (mode $06)
+    def read_self_tests(self):
+        elm = self.elm
+        if not elm:
+            return
+        self._clear(self.mode6_out)
+        self._line(self.mode6_out, "Reading self-test results…", color=C["muted"], pady=(12, 0))
+
+        def work():
+            return advanced.self_tests(elm, lambda i, n: self.ui(
+                lambda: self.set_step(f"Reading self-test results ({i + 1} of {n})…", (i + 1) / max(n, 1))))
+
+        def done(results):
+            self.last_results["self_tests"] = results
+            self._show_self_tests(results)
+
+        def failed(err):
+            self._clear(self.mode6_out)
+            self._line(self.mode6_out, str(err), color=C["muted"], pady=(12, 0))
+        self.run_bg(work, done, "Reading self-test results…", on_error=failed, quiet_errors=True)
+
+    def _show_self_tests(self, results):
+        out = self.mode6_out
+        self._clear(out)
+        if not results:
+            self._line(out, "The vehicle didn't report any self-test results. Some only report them after a full "
+                            "drive cycle.", color=C["muted"], pady=(12, 0))
+            return
+        failed = [r for r in results if not r["passed"]]
+        self._line(out, f"{len(results) - len(failed)} of {len(results)} test results within limits.", bold=True,
+                   color=C["red"] if failed else C["green"], size=15, pady=(14, 4))
+        mis = advanced.misfire_summary(results)
+        if mis:
+            self._line(out, "Misfires per cylinder", bold=True, pady=(8, 2))
+            worst = max([1] + [v for pair in mis.values() for v in pair if v is not None])
+            grid = tk.Frame(out, bg=C["panel"])
+            grid.pack(fill="x")
+            for i, (cyl, (cur, avg)) in enumerate(mis.items()):
+                tk.Label(grid, text=f"Cylinder {cyl}", bg=C["panel"], fg=C["ink"], font=F(13)).grid(
+                    row=i, column=0, sticky="w", pady=2)
+                bar = tk.Canvas(grid, width=260, height=16, bg=C["panel"], highlightthickness=0)
+                bar.grid(row=i, column=1, sticky="w", padx=12)
+                icons.rounded_rect(bar, 1, 2, 259, 14, 6, fill=C["off_soft"], outline="")
+                n = cur if cur is not None else avg or 0
+                if n:
+                    color = C["red"] if n >= 10 else C["amber"]
+                    icons.rounded_rect(bar, 1, 2, max(14, 258 * n / worst), 14, 6, fill=color, outline="")
+                txt = (f"{cur:.0f} this drive" if cur is not None else "") + \
+                      (f", {avg:.0f} average" if avg is not None else "")
+                tk.Label(grid, text=txt.strip(", ") or "-", bg=C["panel"], fg=C["muted"], font=F(12)).grid(
+                    row=i, column=2, sticky="w")
+            self._line(out, "A few counts now and then is normal. One cylinder with many more than the others "
+                            "points to that cylinder's plug, coil or injector.", color=C["muted"], size=12)
+        groups = {}
+        for r in results:
+            if r["misfire"] is None:
+                groups.setdefault(r["name"], []).append(r)
+        if groups:
+            self._line(out, "All test results", bold=True, pady=(12, 2))
+        for name, rows in groups.items():
+            row = tk.Frame(out, bg=C["panel"])
+            row.pack(fill="x", pady=(6, 0))
+            ok = all(r["passed"] for r in rows)
+            self._pill(row, "Passed" if ok else "Failed", ok).pack(side="right")
+            tk.Label(row, text=name, bg=C["panel"], fg=C["ink"], font=F(14, "bold"), anchor="w").pack(side="left")
+            for r in rows:
+                v = lambda x: f"{x:.3f}".rstrip("0").rstrip(".") if isinstance(x, float) else str(x)  # noqa: E731
+                unit = f" {r['unit']}" if r["unit"] else ""
+                self._line(out, f"Test ${r['tid']:02X}: {v(r['value'])}{unit}   (allowed {v(r['low'])} to "
+                                f"{v(r['high'])}{unit})", color=C["ink"] if r["passed"] else C["red"], size=12,
+                           pady=(1, 0))
+
+    # Module info (mode $09)
+    def read_module_info(self):
+        elm = self.elm
+        if not elm:
+            return
+
+        def done(info):
+            self.last_results["modules"] = info
+            out = self.mod9_out
+            self._clear(out)
+            if not info:
+                self._line(out, "The vehicle didn't report module info.", color=C["muted"], pady=(12, 0))
+                return
+            for ecu, d in info.items():
+                name = d["name"] or ECU_NAMES.get(ecu, f"Module {ecu}")
+                self._line(out, name, bold=True, size=15, pady=(14, 2))
+                for cal in d["calids"]:
+                    self._line(out, f"Calibration (software) ID: {cal}", pady=(1, 0))
+                for cvn in d["cvns"]:
+                    self._line(out, f"Calibration check number: {cvn}", pady=(1, 0))
+                for label, val in d["usage"]:
+                    self._line(out, f"{label}: {val}", pady=(1, 0))
+            self._line(out, "Dealers and parts stores use the calibration ID to see if a software update exists. A "
+                            "self-test that rarely runs can explain a 'not ready' smog check.", color=C["muted"],
+                       size=12, pady=(10, 0))
+        self.run_bg(lambda: advanced.module_info(elm), done, "Reading module info…")
+
+    # Battery and charging test
+    def battery_test(self):
+        elm = self.elm
+        if not elm:
+            return
+        out = self.batt_out
+        self._clear(out)
+        self.batt = {}
+
+        def rpm():
+            d = elm.query_pid(1, 0x0C)
+            return (d[0] * 256 + d[1]) / 4 if d and len(d) >= 2 else None
+
+        def volts():
+            try:
+                return float(elm.voltage().upper().rstrip("V").strip())
+            except ValueError:
+                return None
+
+        def step1():
+            r = rpm()
+            if r and r > 300:
+                return "running"
+            vs = [v for v in (volts() for _ in range(5)) if v]
+            return max(vs) if vs else None
+
+        def after1(v):
+            self._clear(out)
+            if v == "running":
+                self._line(out, "Turn the engine OFF (key ON is fine) and click Start test again. The battery is "
+                                "checked at rest first.", color=C["amber_ink"], pady=(12, 0))
+                return
+            if v is None:
+                self._line(out, "Couldn't read the voltage from the adapter.", color=C["muted"], pady=(12, 0))
+                return
+            self.batt["rest"] = v
+            self._batt_row("Battery at rest", f"{v:.2f} V", *(
+                ("Fully charged", True) if v >= 12.55 else ("Good", True) if v >= 12.35 else
+                ("Half charged - charge it", False) if v >= 12.0 else ("Low - charge or replace", False)))
+            self._line(out, "Now start the engine. Click Ready, then start it within 10 seconds.", bold=True,
+                       pady=(10, 4))
+            b = PillButton(out, "Ready", lambda: (b.destroy(), self.run_bg(step2, after2, "Start the engine now…")),
+                           kind="primary")
+            b.pack(anchor="w")
+
+        def step2():
+            low, end, started = 99.0, time.time() + 15, False
+            while time.time() < end:
+                v = volts()
+                if v:
+                    low = min(low, v)
+                    if low < self.batt["rest"] - 0.4 and v > 13.0:
+                        started = True
+                        break
+            return low, started
+
+        def after2(res):
+            low, started = res
+            if not started:
+                self._line(out, "Didn't see the engine start. If it did start, the adapter may have missed the dip; "
+                                "otherwise try again.", color=C["amber_ink"])
+            if low < 50:
+                self.batt["crank"] = low
+                self._batt_row("Lowest while starting", f"{low:.2f} V", *(
+                    ("Strong", True) if low >= 10.0 else ("OK", True) if low >= 9.6 else
+                    ("Weak - battery or starter", False)))
+            time.sleep(0)
+            self.run_bg(step3, after3, "Checking charging at idle…")
+
+        def step3():
+            time.sleep(4)
+            vs = [v for v in (volts() for _ in range(6)) if v]
+            return sum(vs) / len(vs) if vs else None
+
+        def charge_verdict(v):
+            return (("Charging normally", True) if 13.4 <= v <= 14.9 else
+                    ("Overcharging - check the alternator", False) if v > 14.9 else
+                    ("Not charging enough - check alternator, belt and cables", False))
+
+        def after3(v):
+            if v is None:
+                return
+            self.batt["idle"] = v
+            self._batt_row("Charging at idle", f"{v:.2f} V", *charge_verdict(v))
+            self._line(out, "Last step: hold the engine at about 2,000 rpm (in Park or Neutral), then click Ready.",
+                       bold=True, pady=(10, 4))
+            b = PillButton(out, "Ready", lambda: (b.destroy(), self.run_bg(step4, after4, "Hold about 2,000 rpm…")),
+                           kind="primary")
+            b.pack(anchor="w")
+
+        def step4():
+            vs, end = [], time.time() + 12
+            while time.time() < end and len(vs) < 5:
+                r = rpm()
+                if r and r > 1500:
+                    v = volts()
+                    if v:
+                        vs.append(v)
+            return sum(vs) / len(vs) if vs else None
+
+        def after4(v):
+            if v is None:
+                self._line(out, "Didn't see the engine above 1,500 rpm, so this step was skipped.",
+                           color=C["muted"])
+            else:
+                self.batt["high"] = v
+                self._batt_row("Charging at 2,000 rpm", f"{v:.2f} V", *charge_verdict(v))
+            self._line(out, "Done. You can let the engine idle again. Parts stores can do a load test if anything "
+                            "here looks weak.", color=C["muted"], size=12, pady=(10, 0))
+            self.last_results["battery"] = dict(self.batt)
+
+        if self.live_running:
+            self.live_stop.set()
+        self.run_bg(step1, after1, "Checking the battery…")
+
+    def _batt_row(self, label, value, verdict, good):
+        row = tk.Frame(self.batt_out, bg=C["panel"])
+        row.pack(fill="x", pady=(10, 0))
+        tk.Label(row, text=label, bg=C["panel"], fg=C["ink"], font=F(14), width=22, anchor="w").pack(side="left")
+        tk.Label(row, text=value, bg=C["panel"], fg=C["ink"], font=F(16, "bold"), width=9, anchor="w").pack(
+            side="left")
+        self._pill(row, verdict, good).pack(side="left")
+        self.batt.setdefault("verdicts", []).append((label, value, verdict, good))
+
+    # --- History page --------------------------------------------------------------------------------
+    def _save_history(self):
+        v = self.vehicle or {}
+        vin = v.get("vin", "")
+        vin = vin if vin and vin != "-" else ""
+        name = self.vehicle_lbl["text"] or v.get("title", "")
+        try:
+            history.add(vin, name, self.scan_kind, self.items, self.mil_on)
+        except Exception as e:  # noqa: BLE001 - history must never break a scan
+            self._append_log(f"Couldn't save scan history: {e}")
+
+    def _build_history(self):
+        page = tk.Frame(self.main, bg=C["page"])
+        self._page_title(page, "History", "Every scan is saved here by vehicle, so you can see what came back "
+                                          "after a repair.", icon=PAGE_ICON["History"])
+        self.history_area = ScrollArea(page, C["page"])
+        self.history_area.pack(fill="both", expand=True)
+        return page
+
+    def refresh_history(self):
+        area = self.history_area
+        area.clear()
+        groups = history.by_vehicle()
+        if not groups:
+            self._empty_card(area.inner, PAGE_ICON["History"], "No scans saved yet",
+                             "Scans are saved here automatically after each scan.", None)
+            return
+        for name, scans in groups:
+            tk.Label(area.inner, text=name, bg=C["page"], fg=C["ink"], font=F(18, "bold"), anchor="w").pack(
+                fill="x", pady=(8, 6))
+            for i, sc in enumerate(scans[:15]):
+                card = RoundPanel(area.inner, pad=(20, 12), radius=16)
+                card.pack(fill="x", pady=(0, 8))
+                box = card.inner
+                top = tk.Frame(box, bg=C["panel"])
+                top.pack(fill="x")
+                when = datetime.datetime.fromisoformat(sc["when"]).strftime("%b %d, %Y at %I:%M %p")
+                what = {"engine": "Engine codes", "safety": "ABS and airbag"}.get(sc["kind"], "Full scan")
+                tk.Label(top, text=f"{when} · {what}", bg=C["panel"], fg=C["ink"], font=F(14, "bold"),
+                         anchor="w").pack(side="left")
+                n = len(sc["codes"])
+                self._pill(top, f"{n} code{'s' if n != 1 else ''}" if n else "No codes", not n).pack(side="right")
+                if i + 1 < len(scans):
+                    new, gone = history.changes(sc, scans[i + 1])
+                    bits = []
+                    if new:
+                        bits.append("New since the scan before: " + ", ".join(new))
+                    if gone:
+                        bits.append("Gone since the scan before: " + ", ".join(gone))
+                    if bits:
+                        self._line(box, ". ".join(bits) + ".", color=C["amber_ink"] if new else C["green"], size=12)
+                for c in sc["codes"][:12]:
+                    self._line(box, f"{c['code']}  {c['text']}  ({c['module']})", size=12, pady=(1, 0))
+                if n > 12:
+                    self._line(box, f"…and {n - 12} more", color=C["muted"], size=12, pady=(1, 0))
+        bar = tk.Frame(area.inner, bg=C["page"])
+        bar.pack(fill="x", pady=(8, 0))
+        LinkLabel(bar, "Clear history", self._clear_history).pack(side="left")
+
+    def _clear_history(self):
+        if messagebox.askyesno(APP_NAME, "Delete all saved scans? This can't be undone."):
+            history.clear()
+            self.refresh_history()
 
     # --- Service page: relearns, resets and bleeding ------------------------------------------------
     def _build_service(self):
@@ -2175,31 +2766,29 @@ class App:
         webbrowser.open("https://www.google.com/search?q=" + urllib.parse.quote(q))
 
     def save_report(self):
+        """Save a printable health report (a web page) and open it in the browser."""
         today = datetime.date.today().isoformat()
-        path = filedialog.asksaveasfilename(defaultextension=".txt", initialfile=f"vehicle-report-{today}.txt",
-                                            filetypes=[("Text file", "*.txt")])
+        path = filedialog.asksaveasfilename(defaultextension=".html", initialfile=f"vehicle-report-{today}.html",
+                                            filetypes=[("Web page", "*.html")])
         if not path:
             return
-        v = self.vehicle
-        lines = [f"Vehicle report, {datetime.datetime.now():%B %d, %Y %I:%M %p}", "=" * 60,
-                 f"Vehicle:  {v.get('title', '-')}", f"VIN:      {v.get('vin', '-')}",
-                 f"Battery:  {v.get('voltage', '-')}", ""]
-        if self.mil_on is not None:
-            lines.append(f"Check-engine light: {'ON' if self.mil_on else 'off'}")
-        lines += ["", "PROBLEMS", "-" * 60]
-        if not self.items:
-            lines.append("None found.")
+        items = []
         for it in self.items:
-            lines += [f"[{LEVELS[it['level']][3]}] {it['code']}  {it['info']['description']}",
-                      f"    Found in: {it['module']}   Status: {it['status']}",
-                      f"    {why_it_matters(it['code'], it['status'], it['module'])}"]
-            lines += [f"    {n}. {step}" for n, step in enumerate(it["info"].get("checks") or [], 1)]
-            lines.append("")
-        if self.modules:
-            lines += ["Modules that answered: " + ", ".join(m["name"] for m in self.modules)]
+            items.append(dict(it, words=LEVELS[it["level"]][3],
+                              why=it.get("why") or why_it_matters(it["code"], it["status"], it["module"])))
+        rows = None
+        if self.readiness and len(self.readiness) >= 4:
+            rows = decode_readiness(self.readiness)[3]
+        tests = self.last_results.get("self_tests")
+        data = {"vehicle": self.vehicle, "items": items, "scanned": self.scanned, "mil_on": self.mil_on,
+                "readiness_rows": rows, "self_tests": tests,
+                "misfires": advanced.misfire_summary(tests) if tests else None,
+                "modules": self.last_results.get("modules"), "battery": self.last_results.get("battery"),
+                "recalls": getattr(self, "last_recalls", None)}
         with open(path, "w", encoding="utf-8") as f:
-            f.write("\n".join(lines) + "\n")
+            f.write(report.build(data))
         self.step_lbl.configure(text=f"Report saved to {path}")
+        webbrowser.open("file://" + urllib.parse.quote(os.path.abspath(path)))
 
     def _on_close(self):
         self.live_stop.set()
