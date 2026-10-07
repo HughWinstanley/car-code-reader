@@ -1,11 +1,11 @@
 {
-  "version": "2.3",
-  "notes": "New dark look with rounded cards and redesigned badges and icons.",
+  "version": "2.4",
+  "notes": "White look with black accents, cleaner badges, and a clearer smog check icon.",
   "files": {
-    "car_code_reader.py": "db798da7b27c4467bd4c3ca0714ae8a297f2dd90b4bc7474d5ebf9ca28998c6b",
+    "car_code_reader.py": "a077ef483666be8f9dc37d576252641f4c9ea7e03e2774a9e9feb1fe92f89148",
     "obd_core.py": "0b1b6127848c150b3c9d432e96116cec1afa2fdcabb074e27a25186c16e2e837",
     "dtc_database.py": "a1a338f2f1f5645585eb41feffbbe0610a0ef6a53ac10a407ea3bc901c70390c",
-    "icons.py": "f90763df1a3b83b31de36c1ebc7f0b1c0345427c9013dcfa9a5f5554a955cb69",
+    "icons.py": "a8e7c25ce114fae634abfd9770fb09f40aa5ae8857ad0a56f00de8dcb9c2b589",
     "vehicles.py": "56c9200e53c1f2a6636c4bacb292c65272b29c9d8d1267707f0785591cbbff25",
     "updater.py": "7592050d0b436b149454fb214d98284a19e60aae87bdfe43c3a01965801cf980",
     "icon.png": "635873108e9b9e6e7bd54b68695ad71151c96e2ff78cad1ed53db48a13a2f71c"

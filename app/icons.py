@@ -50,46 +50,33 @@ def glow(cv, cx, cy, radius, color, steps=10, strength=0.55):
 
 # --- Make emblems -----------------------------------------------------------------------
 def make_badge(cv, letters, cx, cy, size, fill, font):
-    """A shield-shaped emblem: lit from the top, a bright rim, a pressed inner field and the monogram."""
+    """A shield emblem: soft shadow, a steel rim, a dark field with a glossy upper half, and the monogram."""
     h = size / 2
-    top, bottom, left, right = cy - h * 0.92, cy + h, cx - h * 0.86, cx + h * 0.86
 
     def shield(inset):
-        l, r, t, b = left + inset, right - inset, top + inset, bottom - inset * 1.25
-        return [l + (r - l) * 0.18, t, cx, t - size * 0.02, r - (r - l) * 0.18, t, r, t + size * 0.08,
-                r, cy + h * 0.18, r - (r - l) * 0.12, cy + h * 0.55, cx, b, l + (r - l) * 0.12, cy + h * 0.55,
-                l, cy + h * 0.18, l, t + size * 0.08]
+        l, r = cx - h * 0.86 + inset, cx + h * 0.86 - inset
+        t, b = cy - h * 0.9 + inset, cy + h - inset * 1.3
+        return [l, t + size * 0.06, l + (r - l) * 0.5, t - size * 0.03, r, t + size * 0.06,
+                r, cy + h * 0.2, cx, b, l, cy + h * 0.2]
 
     bg = _bg(cv)
-    cv.create_polygon(shield(-size * 0.05), smooth=True, fill=blend(bg, fill, 0.25), outline="")  # soft shadow
-    rim = blend(fill, "#FFFFFF", 0.45)
-    cv.create_polygon(shield(0), smooth=True, fill=rim, outline="")
-    # inner field: horizontal bands from light (top) to deep (bottom)
-    bands = 9
-    inner = shield(size * 0.06)
-    xs, ys = inner[0::2], inner[1::2]
-    y0, y1 = min(ys), max(ys)
-    cv.create_polygon(inner, smooth=True, fill=blend(fill, "#000000", 0.25), outline="")
-    for i in range(bands):
-        t = i / bands
-        clip = y0 + (y1 - y0) * t
-        pts = []
-        for x, y in zip(xs, ys):
-            pts += [x, max(y, clip) if y < clip else y]
-        cv.create_polygon(pts, smooth=True, outline="",
-                          fill=blend(blend(fill, "#FFFFFF", 0.22), blend(fill, "#000000", 0.28), t))
-    # highlight sweep across the top
-    cv.create_arc(left + size * 0.12, top + size * 0.05, right - size * 0.12, cy + h * 0.2, start=25, extent=130,
-                  style="arc", outline=blend(fill, "#FFFFFF", 0.6), width=max(1, size / 34))
-    cv.create_text(cx + 1, cy + size * 0.02 + 1, text=letters, fill=blend(fill, "#000000", 0.55), font=font)
-    cv.create_text(cx, cy + size * 0.02, text=letters, fill="#FFFFFF", font=font)
+    shadow = [x + (size * 0.03 if i % 2 else 0) for i, x in enumerate(shield(0))]
+    cv.create_polygon(shadow, smooth=True, fill=blend(bg, "#000000", 0.12), outline="")
+    cv.create_polygon(shield(0), smooth=True, fill=blend(fill, "#FFFFFF", 0.55), outline="")   # steel rim
+    inner = shield(size * 0.07)
+    cv.create_polygon(inner, smooth=True, fill=fill, outline="")
+    # gloss: the same shape, squashed into the top half
+    top = min(inner[1::2])
+    gloss = [v if i % 2 == 0 else top + (v - top) * 0.45 for i, v in enumerate(inner)]
+    cv.create_polygon(gloss, smooth=True, fill=blend(fill, "#FFFFFF", 0.14), outline="")
+    cv.create_text(cx, cy + size * 0.03, text=letters, fill="#FFFFFF", font=font)
 
 
 # --- Feature icons ----------------------------------------------------------------------
 def _engine(cv, cx, cy, s, c):
     u = s / 10
     w = max(2, s / 26)
-    dark = blend(c, "#000000", 0.45)
+    dark = blend(c, _bg(cv), 0.85)  # fins in the background color, so they read on any fill
     body = [cx - 3 * u, cy - 1.4 * u, cx + 2.2 * u, cy - 1.4 * u, cx + 2.2 * u, cy - 0.5 * u,
             cx + 3.3 * u, cy - 0.5 * u, cx + 3.3 * u, cy + 1.9 * u, cx + 1.4 * u, cy + 1.9 * u,
             cx + 0.6 * u, cy + 2.7 * u, cx - 2.2 * u, cy + 2.7 * u, cx - 3 * u, cy + 1.9 * u]
@@ -154,15 +141,20 @@ def _gauge(cv, cx, cy, s, c, colors=("#3DDC84", "#F2A93B", "#FF5A4E")):
 
 
 def _smog(cv, cx, cy, s, c):
-    """A leaf with a vein and a check mark: 'clean enough to pass'."""
+    """A tailpipe puffing exhaust, with a round check badge: 'passes the emissions test'."""
     u = s / 10
-    w = max(2, s / 18)
-    leaf = [cx - 3.6 * u, cy + 3.2 * u, cx - 3.4 * u, cy - 1.6 * u, cx + 0.2 * u, cy - 3.8 * u,
-            cx + 3.8 * u, cy - 3.6 * u, cx + 3.4 * u, cy + 0.4 * u, cx + 0.8 * u, cy + 3.4 * u]
-    cv.create_polygon(leaf, smooth=True, fill=blend(_bg(cv), c, 0.35), outline=c, width=w)
-    cv.create_line(cx - 3.6 * u, cy + 3.2 * u, cx + 2.6 * u, cy - 2.6 * u, fill=c, width=w * 0.8, capstyle="round")
-    cv.create_line(cx - 1.4 * u, cy + 0.6 * u, cx - 0.2 * u, cy + 1.8 * u, cx + 2 * u, cy - 0.8 * u,
-                   fill="#FFFFFF", width=w * 1.1, capstyle="round", joinstyle="round")
+    w = max(2, s / 16)
+    bg = _bg(cv)
+    py = cy + 2.0 * u
+    cv.create_line(cx - 4.4 * u, py, cx - 1.4 * u, py, fill=c, width=w * 2, capstyle="butt")
+    cv.create_oval(cx - 1.75 * u, py - 0.85 * u, cx - 0.95 * u, py + 0.85 * u, fill=bg, outline=c, width=w * 0.7)
+    for px, dy, r in ((0.3, 0.0, 0.55), (1.6, -0.4, 0.75), (3.2, -0.9, 0.95)):
+        cv.create_oval(cx + (px - r) * u, py + (dy - r) * u, cx + (px + r) * u, py + (dy + r) * u,
+                       fill=bg, outline=c, width=w * 0.6)
+    bx, by, br = cx - 1.2 * u, cy - 2.2 * u, 1.9 * u
+    cv.create_oval(bx - br, by - br, bx + br, by + br, fill=c, outline="")
+    cv.create_line(bx - 0.9 * u, by + 0.05 * u, bx - 0.2 * u, by + 0.8 * u, bx + 1.0 * u, by - 0.7 * u,
+                   fill=bg, width=w * 0.9, capstyle="round", joinstyle="round")
 
 
 def _body(cv, cx, cy, s, c, kind):
@@ -212,8 +204,9 @@ def _body(cv, cx, cy, s, c, kind):
 
 
 def draw(cv, name, cx, cy, size, color, small_font=None, halo=False):
-    if halo:
-        glow(cv, cx, cy, size * 0.78, color)
+    if halo:  # a soft disc behind the icon
+        r = size * 0.72
+        cv.create_oval(cx - r, cy - r, cx + r, cy + r, fill=blend(_bg(cv), color, 0.06), outline="")
     if name == "engine":
         _engine(cv, cx, cy, size, color)
     elif name == "abs":

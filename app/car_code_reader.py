@@ -37,15 +37,16 @@ IS_MAC = sys.platform == "darwin"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONN_AUTO = "Find my adapter automatically"
 
-# --- Palette: an instrument cluster at night. Black glass, warm amber needles, signal colors --
+# --- Palette: white paper, black ink. Color is kept only for status (red, amber, green) --------
 C = {
-    "page": "#0C0F12", "panel": "#161B21", "raised": "#1E252D", "ink": "#E9EEF3", "muted": "#8F9BA7",
-    "line": "#262E37", "header": "#06080A", "header_hover": "#1A2026", "side": "#0A0D10", "hover": "#202830",
-    "amber": "#F2A93B", "amber_ink": "#F7C26B", "amber_soft": "#33280F",
-    "red": "#FF5D52", "red_soft": "#3A1A19",
-    "green": "#3DDC84", "green_soft": "#123222",
-    "blue": "#62B0F5", "blue_soft": "#142A3E",
-    "off": "#6D7884", "off_soft": "#1F252B", "steel": "#8FB3D6",
+    "page": "#FFFFFF", "panel": "#FFFFFF", "raised": "#F3F3F3", "ink": "#000000", "muted": "#6B6B6B",
+    "line": "#E2E2E2", "header": "#000000", "header_hover": "#2A2A2A", "side": "#FFFFFF", "hover": "#F3F3F3",
+    "black": "#000000",
+    "amber": "#E39A12", "amber_ink": "#8A5A00", "amber_soft": "#FFF3DC",
+    "red": "#D9362B", "red_soft": "#FDE6E4",
+    "green": "#1E8A4A", "green_soft": "#E2F3E8",
+    "blue": "#000000", "blue_soft": "#EFEFEF",
+    "off": "#A3A3A3", "off_soft": "#F1F1F1", "steel": "#000000",
 }
 LEVELS = {  # urgency -> (bar color, pill background, pill text color, words)
     "high": (C["red"], C["red_soft"], C["red"], "Fix soon"),
@@ -72,10 +73,10 @@ def F(size, weight="normal"):
 # ----------------------------------------------------------------------------
 class PillButton(tk.Canvas):
     STYLES = {
-        "primary": {"fill": C["amber"], "hover": "#FFBE5C", "text": "#16110A", "outline": C["amber"]},
-        "secondary": {"fill": C["raised"], "hover": C["hover"], "text": C["ink"], "outline": C["raised"]},
-        "danger": {"fill": C["raised"], "hover": C["red_soft"], "text": C["red"], "outline": C["raised"]},
-        "onheader": {"fill": C["header"], "hover": C["header_hover"], "text": C["ink"], "outline": "#2C353F"},
+        "primary": {"fill": "#000000", "hover": "#2A2A2A", "text": "#FFFFFF", "outline": "#000000"},
+        "secondary": {"fill": "#FFFFFF", "hover": "#F3F3F3", "text": "#000000", "outline": "#000000"},
+        "danger": {"fill": "#FFFFFF", "hover": C["red_soft"], "text": C["red"], "outline": C["red"]},
+        "onheader": {"fill": "#000000", "hover": "#2A2A2A", "text": "#FFFFFF", "outline": "#FFFFFF"},
     }
 
     def __init__(self, parent, text, command, kind="secondary", big=False):
@@ -125,22 +126,23 @@ class PillButton(tk.Canvas):
         pts = [1 + r, 1, w - r, 1, w, 1, w, 1 + r, w, h - r, w, h, w - r, h, 1 + r, h, 1, h, 1, h - r, 1, 1 + r, 1, 1]
         self.create_polygon(pts, smooth=True, fill=fill, outline=outline, width=1)
         if self.focus_displayof() == self and self.enabled:
-            self.create_polygon(pts, smooth=True, fill="", outline=C["blue"], width=2)
+            self.create_polygon(pts, smooth=True, fill="", outline=C["amber"], width=2)
         self.create_text(self.w / 2, self.h / 2, text=self.text, fill=text, font=self.font)
 
 
 class LinkLabel(tk.Label):
     def __init__(self, parent, text, command, size=13):
-        super().__init__(parent, text=text, fg=C["blue"], bg=parent["bg"], font=F(size), cursor="hand2")
+        under = tkfont.Font(font=F(size, "bold"))
+        under.configure(underline=True)
+        self._fonts = (F(size, "bold"), under)
+        super().__init__(parent, text=text, fg="#000000", bg=parent["bg"], font=self._fonts[1], cursor="hand2")
         self.bind("<Button-1>", lambda e: command())
-        self.bind("<Enter>", lambda e: self.configure(font=F(size, "bold")))
-        self.bind("<Leave>", lambda e: self.configure(font=F(size)))
 
 
 class Lamp(tk.Canvas):
     """The dashboard warning light: gray (not connected), amber/red (problems), green (all clear)."""
     STATES = {
-        "off": ("#3A444E", "#1A2027", "?"), "busy": (C["blue"], C["blue_soft"], "…"),
+        "off": ("#D4D4D4", "#F1F1F1", "?"), "busy": ("#000000", "#EFEFEF", "…"),
         "ok": (C["green"], C["green_soft"], "✓"), "warn": (C["amber"], C["amber_soft"], "!"),
         "bad": (C["red"], C["red_soft"], "!"),
     }
@@ -175,7 +177,7 @@ class Lamp(tk.Canvas):
         self.create_oval(m + s * 0.08, m + s * 0.05, s - m - s * 0.08, s / 2, fill=icons.blend(core, "#FFFFFF", 0.25),
                          outline="")
         self.create_oval(m + s * 0.04, m + s * 0.04, s - m - s * 0.04, s - m - s * 0.04, fill="", outline="")
-        self.create_text(s / 2, s / 2 + 1, text=glyph, fill="#0C0F12" if self.state != "off" else C["muted"],
+        self.create_text(s / 2, s / 2 + 1, text=glyph, fill="#FFFFFF",
                          font=F(int(s * 0.28), "bold"))
 
 
@@ -307,10 +309,10 @@ class Tile(tk.Canvas):
         self.set_height(self.h)
         self.bind("<Button-1>", lambda e: self.command())
         self.bind("<Return>", lambda e: self.command())
-        self.bind("<Enter>", lambda e: self.itemconfigure(self.card, outline=C["amber"]))
+        self.bind("<Enter>", lambda e: self.itemconfigure(self.card, outline="#000000", width=2))
         # (set_height draws the card)
-        self.bind("<Leave>", lambda e: self.itemconfigure(self.card, outline=C["line"]))
-        self.bind("<FocusIn>", lambda e: self.itemconfigure(self.card, outline=C["blue"], width=2))
+        self.bind("<Leave>", lambda e: self.itemconfigure(self.card, outline=C["line"], width=1))
+        self.bind("<FocusIn>", lambda e: self.itemconfigure(self.card, outline="#000000", width=2))
         self.bind("<FocusOut>", lambda e: self.itemconfigure(self.card, outline=C["line"], width=1))
 
 
@@ -424,9 +426,9 @@ class App:
             style.theme_use("clam")
         except tk.TclError:
             pass
-        style.configure("Lamp.Horizontal.TProgressbar", troughcolor=C["raised"], background=C["amber"],
-                        bordercolor=C["page"], lightcolor=C["amber"], darkcolor=C["amber"], thickness=6)
-        style.configure("Vertical.TScrollbar", background=C["raised"], troughcolor=C["page"], bordercolor=C["page"],
+        style.configure("Lamp.Horizontal.TProgressbar", troughcolor=C["raised"], background="#000000",
+                        bordercolor=C["page"], lightcolor="#000000", darkcolor="#000000", thickness=6)
+        style.configure("Vertical.TScrollbar", background="#D6D6D6", troughcolor=C["page"], bordercolor=C["page"],
                         arrowcolor=C["muted"], lightcolor=C["raised"], darkcolor=C["raised"], gripcount=0)
         style.map("Vertical.TScrollbar", background=[("active", C["hover"])])
         for w in ("TEntry", "TCombobox"):
@@ -437,8 +439,8 @@ class App:
                   foreground=[("disabled", C["muted"])])
         root.option_add("*TCombobox*Listbox.background", C["raised"])
         root.option_add("*TCombobox*Listbox.foreground", C["ink"])
-        root.option_add("*TCombobox*Listbox.selectBackground", C["amber"])
-        root.option_add("*TCombobox*Listbox.selectForeground", "#16110A")
+        root.option_add("*TCombobox*Listbox.selectBackground", "#000000")
+        root.option_add("*TCombobox*Listbox.selectForeground", "#FFFFFF")
         self.elm = None
         self.q = queue.Queue()
         self.busy = False
@@ -517,14 +519,14 @@ class App:
     def _build(self):
         head = tk.Frame(self.root, bg=C["header"], padx=20, pady=14)
         head.pack(fill="x")
-        tk.Frame(self.root, bg=C["line"], height=1).pack(fill="x")
+
         if self._icon is not None:
             small = self._icon.subsample(max(1, self._icon.width() // 34))
             self._small_icon = small
             tk.Label(head, image=small, bg=C["header"]).pack(side="left", padx=(0, 10))
         tk.Label(head, text=APP_NAME, bg=C["header"], fg="#FFFFFF", font=F(17, "bold")).pack(side="left")
         self.disconnect_btn = PillButton(head, "Disconnect", self.disconnect, kind="onheader")
-        self.vehicle_lbl = tk.Label(head, text="", bg=C["header"], fg=C["amber_ink"], font=F(13, "bold"))
+        self.vehicle_lbl = tk.Label(head, text="", bg=C["header"], fg="#FFFFFF", font=F(13, "bold"))
         self.vehicle_lbl.pack(side="right", padx=(0, 12))
 
         body = tk.Frame(self.root, bg=C["page"])
@@ -532,6 +534,7 @@ class App:
         side = tk.Frame(body, bg=C["side"], width=200, pady=18)
         side.pack(side="left", fill="y")
         side.pack_propagate(False)
+        tk.Frame(body, bg=C["line"], width=1).pack(side="left", fill="y")
         self.nav = {}
         for name in self.PAGES:
             item = tk.Canvas(side, width=176, height=42, bg=C["side"], highlightthickness=0, cursor="hand2")
@@ -571,12 +574,8 @@ class App:
         cv.delete("all")
         sel = name == getattr(self, "nav_selected", "")
         if sel or hover:
-            icons.rounded_rect(cv, 0, 1, 175, 41, 14, fill=C["raised"] if sel else C["panel"], outline="")
-        if sel:
-            cv.surface = C["raised"]
-            icons.glow(cv, 18, 21, 9, C["amber"], steps=5, strength=0.45)
-            cv.create_oval(14, 17, 22, 25, fill=C["amber"], outline="")
-        cv.create_text(34, 21, text=name, anchor="w", fill=C["ink"] if sel or hover else C["muted"],
+            icons.rounded_rect(cv, 0, 1, 175, 41, 21, fill="#000000" if sel else C["hover"], outline="")
+        cv.create_text(20, 21, text=name, anchor="w", fill="#FFFFFF" if sel else "#000000",
                        font=F(14, "bold" if sel else "normal"))
 
     def _page_title(self, parent, title, subtitle=""):
@@ -597,25 +596,25 @@ class App:
         self.update_bar = self.update_bar_card.inner
         self.home_vehicle = tk.Frame(page, bg=C["page"])
         self.home_vehicle.pack(fill="x", pady=(10, 18))
-        s, ink, amber = 64, C["steel"], C["amber"]
+        s, ink, amber = 64, "#000000", "#000000"
 
         def art(name, color=ink):
             return lambda cv, x, y: icons.draw(cv, name, x, y, s, color, F(int(s * 0.17), "bold"), halo=True)
 
         def both(cv, x, y):
-            icons.glow(cv, x, y, s * 0.95, C["red"])
-            icons.draw(cv, "abs", x - s * 0.5, y, s * 0.85, C["red"], F(int(s * 0.14), "bold"))
-            icons.draw(cv, "airbag", x + s * 0.5, y, s * 0.85, C["red"])
+            cv.create_oval(x - s * 1.15, y - s * 0.72, x + s * 1.15, y + s * 0.72, fill="#F3F3F3", outline="")
+            icons.draw(cv, "abs", x - s * 0.5, y, s * 0.85, "#000000", F(int(s * 0.14), "bold"))
+            icons.draw(cv, "airbag", x + s * 0.5, y, s * 0.85, "#000000")
 
         tile_grid(page, [
             ("Engine codes", "Check-engine and transmission codes", art("engine", amber),
              lambda: self.start_scan("engine")),
             ("ABS and airbag", "Brake and airbag warning lights", both, lambda: self.start_scan("safety")),
             ("Full scan", "Everything at once", art("scan"), lambda: self.start_scan("all")),
-            ("Live data", "Engine readings in real time", art("gauge", C["ink"]), self.open_live),
-            ("Smog check", "Ready for an emissions test?", art("smog", C["green"]),
+            ("Live data", "Engine readings in real time", art("gauge"), self.open_live),
+            ("Smog check", "Ready for an emissions test?", art("smog"),
              lambda: self.show_page("Smog check")),
-            ("Choose vehicle", "Make, model and year", art("vehicle", C["blue"]), self.open_picker),
+            ("Choose vehicle", "Make, model and year", art("vehicle"), self.open_picker),
         ], columns=3, width=236, art=100)
         return page
 
@@ -628,8 +627,7 @@ class App:
             cv = tk.Canvas(box, width=70, height=70, bg=C["page"], highlightthickness=0)
             cv.pack(side="left", padx=(0, 14))
             letters = vehicles.MAKES[ch["make"]][0]
-            icons.glow(cv, 35, 35, 35, icons.badge_color(ch["make"]), steps=8, strength=0.35)
-            icons.make_badge(cv, letters, 35, 35, 56, icons.badge_color(ch["make"]),
+            icons.make_badge(cv, letters, 35, 35, 56, "#1E1E1E",
                              F(16 if len(letters) < 3 else 13, "bold"))
             txt = tk.Frame(box, bg=C["page"])
             txt.pack(side="left")
@@ -768,8 +766,7 @@ class App:
                 letters = vehicles.MAKES[make][0]
 
                 def painter(cv, x, y, mk=make, lt=letters):
-                    icons.glow(cv, x, y, 52, icons.badge_color(mk), steps=8, strength=0.35)
-                    icons.make_badge(cv, lt, x, y, 64, icons.badge_color(mk), F(17 if len(lt) < 3 else 14, "bold"))
+                    icons.make_badge(cv, lt, x, y, 64, "#1E1E1E", F(17 if len(lt) < 3 else 14, "bold"))
                 spec.append((make, vehicles.support_text(make), painter, lambda mk=make: self._pick_set_make(mk)))
             tile_grid(inner, spec, columns=5, width=150, art=70, title_size=14)
         elif step == "model":
