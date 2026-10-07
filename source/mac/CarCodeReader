@@ -1,0 +1,24 @@
+#!/bin/bash
+RES="$(cd "$(dirname "$0")/../Resources" && pwd)"
+LOG="$HOME/Library/Logs/Car Code Reader.log"
+mkdir -p "$HOME/Library/Logs"
+
+CANDIDATES=(
+  /Library/Frameworks/Python.framework/Versions/Current/bin/python3
+  /opt/homebrew/bin/python3
+  /usr/local/bin/python3
+  /usr/bin/python3
+)
+for PY in "${CANDIDATES[@]}"; do
+  if [ -x "$PY" ] && "$PY" -c "import tkinter, sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)" >/dev/null 2>&1; then
+    cd "$RES" || exit 1
+    echo "--- $(date) using $PY" >> "$LOG"
+    exec "$PY" "$RES/start.py" >> "$LOG" 2>&1
+  fi
+done
+
+ANSWER=$(osascript -e 'display dialog "Car Code Reader needs Python 3 to run.\n\nInstall the free macOS installer from python.org (any recent version), then open Car Code Reader again." with title "Car Code Reader" buttons {"Cancel", "Open python.org"} default button 2 with icon caution' 2>/dev/null)
+if [[ "$ANSWER" == *"python.org"* ]]; then
+  open "https://www.python.org/downloads/macos/"
+fi
+exit 1

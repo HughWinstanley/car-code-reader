@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>Car Code Reader</string>
+  <key>CFBundleDisplayName</key><string>Car Code Reader</string>
+  <key>CFBundleIdentifier</key><string>local.carcodereader</string>
+  <key>CFBundleVersion</key><string>2.2</string>
+  <key>CFBundleShortVersionString</key><string>2.2</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleExecutable</key><string>CarCodeReader</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>LSMinimumSystemVersion</key><string>10.13</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>NSBluetoothAlwaysUsageDescription</key><string>Car Code Reader talks to Bluetooth OBD-II adapters.</string>
+  <key>NSLocalNetworkUsageDescription</key><string>Car Code Reader talks to Wi-Fi OBD-II adapters.</string>
+</dict>
+</plist>

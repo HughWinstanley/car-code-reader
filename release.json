@@ -1,0 +1,13 @@
+{
+  "version": "2.2",
+  "notes": "First version with automatic updates.",
+  "files": {
+    "car_code_reader.py": "8df272cff0929664f59bb21fdc71546fc4665885d2555f674b7c467ac1f19c89",
+    "obd_core.py": "0b1b6127848c150b3c9d432e96116cec1afa2fdcabb074e27a25186c16e2e837",
+    "dtc_database.py": "a1a338f2f1f5645585eb41feffbbe0610a0ef6a53ac10a407ea3bc901c70390c",
+    "icons.py": "963207d66785129782faa6bf9906c876307e4f526e5bd79e911f2fee3bdb480f",
+    "vehicles.py": "56c9200e53c1f2a6636c4bacb292c65272b29c9d8d1267707f0785591cbbff25",
+    "updater.py": "7592050d0b436b149454fb214d98284a19e60aae87bdfe43c3a01965801cf980",
+    "icon.png": "635873108e9b9e6e7bd54b68695ad71151c96e2ff78cad1ed53db48a13a2f71c"
+  }
+}
