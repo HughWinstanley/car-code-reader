@@ -1,12 +1,12 @@
 {
-  "version": "2.6",
-  "notes": "Semi trucks (J1939) and a blink-code guide for 1995 and older vehicles.",
+  "version": "2.7",
+  "notes": "Each model now shows only the years it was sold. Smoother scrolling in lists.",
   "files": {
-    "car_code_reader.py": "8cd5d1826a9e8fef9711570d955371904797304065539f1a87f5849f77d0e94f",
+    "car_code_reader.py": "2d5df5003147dccd75d8fb1b7798deaafef2e06d5a8b93c4cf8f8bda1f92c997",
     "obd_core.py": "4fcbbea157c8b6ba0d6caf493d138297eba9003cd501c6c205f89994f3205cb5",
     "dtc_database.py": "a1a338f2f1f5645585eb41feffbbe0610a0ef6a53ac10a407ea3bc901c70390c",
     "icons.py": "3e5c45919ee6779df8024c01672b23fc26b3bbe43a3f0daa9f3d3ee3be6dd3e6",
-    "vehicles.py": "ff0f91ac337565aa7fd279db819b80f7071582a89b5a08228556acaf4988fed8",
+    "vehicles.py": "88e1fa2299ea36901b8d020531e9184cb94f583b9224cc6b9fc566ab922d49a8",
     "updater.py": "7592050d0b436b149454fb214d98284a19e60aae87bdfe43c3a01965801cf980",
     "j1939.py": "3f9db2423781380ede9f4f40d40037383cf978bc46c265cfb6dbed242801e360",
     "obd1.py": "99da383acb7eb6fa18604500f05ec623214af6c10b0ffc9f00b56f0ea56db70e",

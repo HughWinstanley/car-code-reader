@@ -81,9 +81,9 @@ class PillButton(tk.Canvas):
         "onheader": {"fill": "#000000", "hover": "#2A2A2A", "text": "#FFFFFF", "outline": "#FFFFFF"},
     }
 
-    def __init__(self, parent, text, command, kind="secondary", big=False):
+    def __init__(self, parent, text, command, kind="secondary", big=False, min_width=0):
         super().__init__(parent, bg=parent["bg"], highlightthickness=0, bd=0, cursor="hand2", takefocus=1)
-        self.command, self.kind, self.big = command, kind, big
+        self.command, self.kind, self.big, self.min_width = command, kind, big, min_width
         self.font = F(15 if big else 13, "bold")
         self.enabled, self.hovering = True, False
         self.set_text(text)
@@ -98,7 +98,7 @@ class PillButton(tk.Canvas):
     def set_text(self, text):
         self.text = text
         padx, pady = (24, 12) if self.big else (15, 7)
-        self.w = self.font.measure(text) + 2 * padx
+        self.w = max(self.font.measure(text) + 2 * padx, self.min_width)
         self.h = self.font.metrics("linespace") + 2 * pady
         self.configure(width=self.w, height=self.h)
         self._draw()
@@ -198,7 +198,17 @@ class ScrollArea(tk.Frame):
         self.canvas.bind("<Configure>", lambda e: (self.canvas.itemconfigure(self._win, width=e.width),
                                                    self._update()))
         self.bind("<Enter>", lambda e: self._wheel(True))
-        self.bind("<Leave>", lambda e: self._wheel(False))
+        self.bind("<Leave>", self._leave)
+
+    def _leave(self, _e):
+        """Moving onto a tile inside the list also counts as 'leaving' the frame, so only stop
+        listening to the scroll wheel when the pointer has really left the whole list."""
+        try:
+            under = self.winfo_containing(*self.winfo_pointerxy())
+        except (tk.TclError, KeyError):
+            under = None
+        if under is None or not str(under).startswith(str(self)):
+            self._wheel(False)
 
     def _update(self):
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
@@ -644,7 +654,7 @@ class App:
                      font=F(17, "bold"), anchor="w").pack(fill="x")
             row = tk.Frame(txt, bg=C["page"])
             row.pack(fill="x")
-            tk.Label(row, text=vehicles.support_text(ch["make"]) + ".", bg=C["page"], fg=C["muted"],
+            tk.Label(row, text=vehicles.support_text(ch["make"], ch["year"]) + ".", bg=C["page"], fg=C["muted"],
                      font=F(13)).pack(side="left")
             LinkLabel(row, "Change", self.open_picker).pack(side="left", padx=10)
         else:
@@ -667,7 +677,11 @@ class App:
                                               "maker-specific blink procedures that this app doesn't cover yet.\n\n"
                                               "Engine codes are covered: use Engine codes or 1995 and older.")
                 return
-            self.open_obd1(obd1.group_for(ch["family"]))
+            group = vehicles.obd1_group(ch["make"])
+            if not group:
+                messagebox.showinfo(APP_NAME, f"1995 and older {ch['make']} vehicles use a system this app can't read.")
+                return
+            self.open_obd1(group)
             return
         self.scan_kind = kind
         self.show_page("Problems")
@@ -924,7 +938,7 @@ class App:
             self.pick_title.configure(text=f"Choose the {make} model")
             self.pick_trail.configure(text=make)
             spec = []
-            for model, kind in vehicles.MAKES[make][2]:
+            for model, kind in vehicles.models(make):
                 if q and q not in model.lower():
                     continue
                 body = {"t": "truck", "s": "suv", "c": "car", "v": "van"}[kind]
@@ -938,13 +952,14 @@ class App:
             self.pick_trail.configure(text=f"{self.pick_make} {self.pick_model}".strip())
             grid = tk.Frame(inner, bg=C["page"])
             grid.pack(fill="x", anchor="w")
-            ys = [y for y in vehicles.years(self.pick_make) if not q or q in str(y)]
+            ys = [y for y in vehicles.model_years(self.pick_make, self.pick_model) if not q or q in str(y)]
             for i, y in enumerate(ys):
-                b = PillButton(grid, str(y), lambda yr=y: self._pick_set_year(yr), big=True)
+                b = PillButton(grid, str(y), lambda yr=y: self._pick_set_year(yr), big=True,
+                               min_width=F(15, "bold").measure("2000") + 52)
                 b.grid(row=i // 7, column=i % 7, padx=(0, 10), pady=(0, 10), sticky="w")
-            older = obd1.group_for(vehicles.family_of(self.pick_make))
+            older = vehicles.obd1_group(self.pick_make) and ys and min(ys) < 1996
             note = ("1995 and older: the app walks you through reading the blink codes, no adapter needed."
-                    if older else "1995 and older vehicles mostly use OBD-I, which this app can't read for this make.")
+                    if older else "Only the years this model was sold, and that this app can read, are shown.")
             tk.Label(inner, text=note, bg=C["page"], fg=C["muted"], font=F(12), anchor="w").pack(
                 fill="x", pady=(8, 0))
 
