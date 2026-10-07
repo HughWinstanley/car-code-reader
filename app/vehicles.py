@@ -78,7 +78,7 @@ MAKES = {
         "Express:v:1996-, City Express:v:2015-2018")),
     "GMC": ("GMC", "GM", _m(
         "Sierra 1500:t:1999-, Sierra 2500 / 2500HD:t:1999-, Sierra 3500 / 3500HD:t:2001-, "
-        "Sierra C/K (1500, 2500, 3500):t:1981-2000, S-15:t:1982-1990, Sonoma:t:1991-2004, "
+        "Sierra C/K 1500 / 2500 / 3500:t:1981-2000, S-15:t:1982-1990, Sonoma:t:1991-2004, "
         "Canyon:t:2004-2012|2015-, Yukon:s:1992-, Yukon XL:s:2000-, Suburban (GMC):s:1981-1999, "
         "Jimmy:s:1981-2005, Envoy:s:1998-2000|2002-2009, Acadia:s:2007-, Terrain:s:2010-, Safari:v:1985-2005, "
         "Vandura:v:1981-1995, Savana:v:1996-")),

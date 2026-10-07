@@ -30,6 +30,7 @@ from dtc_database import decode_dtc_bytes, describe_dtc, severity, uds_status_te
 import icons
 import j1939
 import obd1
+import recalls
 import updater
 import vehicles
 from version import VERSION
@@ -435,11 +436,18 @@ class ProblemRow(RoundPanel):
         for w in self.details.winfo_children():
             w.destroy()
         it, info = self.item, self.item["info"]
+        about = as_sentences(info["category"])
+        if info.get("factory"):
+            about = (f"This is the {info['factory']} factory meaning of this code. It can differ a little by model "
+                     f"and year, so double-check before buying parts. " + about)
         parts = [("Why it matters", it.get("why") or why_it_matters(it["code"], it["status"], it["module"])),
                  ("Common causes", info["causes"]),
                  ("How it failed", info["failure_type"].split(": ", 1)[-1] if info["failure_type"] else ""),
-                 ("About this code", as_sentences(info["category"]))]
+                 ("About this code", about)]
+        checks = info.get("checks") or []
         for heading, text in parts:
+            if heading == "About this code" and checks:
+                self._steps(checks)
             if not text:
                 continue
             tk.Label(self.details, text=heading, bg=C["panel"], fg=C["ink"], font=F(13, "bold"),
@@ -451,6 +459,24 @@ class ProblemRow(RoundPanel):
         row = tk.Frame(self.details, bg=C["panel"])
         row.pack(fill="x", pady=(10, 0))
         PillButton(row, "Search for repair info", lambda: self.app.lookup_online(self.item["code"])).pack(side="left")
+        PillButton(row, "Repair videos", lambda: self.app.lookup_online(self.item["code"], videos=True)).pack(
+            side="left", padx=(10, 0))
+
+    def _steps(self, steps):
+        """'How to check it': numbered steps in colored circles, like the Help page."""
+        tk.Label(self.details, text="How to check it", bg=C["panel"], fg=C["ink"], font=F(13, "bold"),
+                 anchor="w").pack(fill="x", pady=(6, 2))
+        box = tk.Frame(self.details, bg=C["panel"])
+        box.pack(fill="x")
+        box.columnconfigure(1, weight=1)
+        wrap = max(300, self.body.winfo_width() - 110)
+        for i, step in enumerate(steps, 1):
+            dot = tk.Canvas(box, width=26, height=26, bg=C["panel"], highlightthickness=0)
+            dot.grid(row=i, column=0, sticky="nw", pady=3)
+            dot.create_oval(2, 2, 24, 24, fill=icons.blend("#FFFFFF", TINT["vehicle"], 0.15), outline="")
+            dot.create_text(13, 13, text=str(i), fill=TINT["vehicle"], font=F(12, "bold"))
+            tk.Label(box, text=step, bg=C["panel"], fg=C["ink"], font=F(13), anchor="w", justify="left",
+                     wraplength=wrap).grid(row=i, column=1, sticky="w", padx=(10, 0), pady=3)
 
 
 # ----------------------------------------------------------------------------
@@ -625,6 +651,10 @@ class App:
             else:
                 frame.pack_forget()
         self.current_page = name
+        if name == "Vehicle" and hasattr(self, "recall_btn"):
+            make, model, year, vin, _ = self._recall_vehicle()
+            if (vin or (make and model and year)) and self._recalls_for != (make, model, year, vin):
+                self.check_recalls(quiet=True)
 
     def _nav_draw(self, name, hover=False):
         cv = self.nav[name]
@@ -1547,10 +1577,17 @@ class App:
         if hook:
             hook()
 
-    @staticmethod
-    def _item(code, module, status, resp=""):
+    def _item(self, code, module, status, resp=""):
         return {"code": code, "module": module, "status": status, "resp": resp,
-                "info": describe_dtc(code), "level": severity(code, status, module)}
+                "info": describe_dtc(code, self._current_make()), "level": severity(code, status, module)}
+
+    def _current_make(self):
+        """The make to use for factory code meanings: the one picked in Choose vehicle, else from the VIN."""
+        ch = getattr(self, "chosen", None)
+        if ch and ch.get("make"):
+            return ch["make"]
+        make = (getattr(self, "vehicle", None) or {}).get("make", "")
+        return "" if make == "-" else make
 
     def clear_codes(self):
         if not messagebox.askyesno(APP_NAME, (
@@ -1831,7 +1868,108 @@ class App:
         self.info_btn = PillButton(bar, "Refresh", self.refresh_info)
         self.info_btn.pack(side="left")
         self.page_buttons.append(self.info_btn)
+
+        # Safety recalls, from the government's free database (works without the adapter)
+        rec = tk.Frame(page, bg=C["page"])
+        rec.pack(fill="both", expand=True, pady=(24, 0))
+        head = tk.Frame(rec, bg=C["page"])
+        head.pack(fill="x")
+        cv = tk.Canvas(head, width=44, height=44, bg=C["page"], highlightthickness=0)
+        cv.pack(side="left", padx=(0, 10))
+        icons.draw(cv, "alert", 22, 22, 26, TINT["safety"], halo=True)
+        tk.Label(head, text="Safety recalls", bg=C["page"], fg=C["ink"], font=F(18, "bold")).pack(side="left")
+        self.recall_btn = PillButton(head, "Check recalls", self.check_recalls, kind="primary")
+        self.recall_btn.pack(side="right")
+        self.recall_status = tk.Label(rec, text="Recalls are repaired free at any dealer. Pick your vehicle or "
+                                                "connect, then click Check recalls.",
+                                      bg=C["page"], fg=C["muted"], font=F(13), anchor="w", justify="left")
+        self.recall_status.pack(fill="x", pady=(6, 4))
+        wrap_on_resize(self.recall_status, 20)
+        self.recall_links = tk.Frame(rec, bg=C["page"])
+        self.recall_links.pack(fill="x", pady=(0, 8))
+        self.recall_area = ScrollArea(rec, C["page"])
+        self.recall_area.pack(fill="both", expand=True)
+        self._recalls_for = None
         return page
+
+    def _recall_vehicle(self):
+        """-> (make, model, year, vin, name) of the vehicle to look up; any part may be empty."""
+        ch = self.chosen or {}
+        vin = (self.vehicle or {}).get("vin", "")
+        vin = vin if vin and vin != "-" and len(vin) == 17 else ""
+        make, model, year = ch.get("make", ""), ch.get("model", ""), str(ch.get("year", "") or "")
+        name = " ".join(x for x in (year, make, model) if x) or (self.vehicle or {}).get("title", "")
+        return make, model, year, vin, name
+
+    def check_recalls(self, quiet=False):
+        make, model, year, vin, name = self._recall_vehicle()
+        for w in self.recall_links.winfo_children():
+            w.destroy()
+        if not vin and not (make and model and year):
+            if not quiet:
+                self.recall_status.configure(text="Pick the make, model and year first so the app knows which "
+                                                  "recalls to look up.")
+                LinkLabel(self.recall_links, "Choose vehicle", self.open_picker).pack(side="left")
+            return
+        self._recalls_for = (make, model, year, vin)
+        self.recall_btn.set_enabled(False)
+        self.recall_status.configure(text=f"Looking up recalls for {name or 'this vehicle'}…")
+
+        def work():
+            try:
+                res, err = recalls.find(make, model, year, vin), None
+            except Exception as e:  # noqa: BLE001 - offline or the database is busy
+                res, err = None, e
+            self.ui(lambda: self._show_recalls(name, vin, res, err))
+        threading.Thread(target=work, daemon=True).start()
+
+    def _show_recalls(self, name, vin, res, err):
+        self.recall_btn.set_enabled(True)
+        self.recall_area.clear()
+        for w in self.recall_links.winfo_children():
+            w.destroy()
+        if err is not None:
+            self._append_log(f"Recall lookup failed: {err}")
+            self.recall_status.configure(text="Couldn't reach the recall database. Check the internet connection "
+                                              "and try again.")
+            return
+        found, matched = res
+        if not matched:
+            self.recall_status.configure(text=f"The recall database doesn't list {name} under that name. Check "
+                                              "on the NHTSA website instead.")
+        elif not found:
+            self.recall_status.configure(text=f"No safety recalls found for {name}.")
+        else:
+            n = len(found)
+            self.recall_status.configure(text=(
+                f"{n} safety recall{'s' if n != 1 else ''} for {name}. Dealers repair recalls free, no matter "
+                "how old the vehicle is. Many may already be fixed on yours: check your VIN to see which are "
+                "still open."))
+        LinkLabel(self.recall_links, "Check my VIN on nhtsa.gov",
+                  lambda: webbrowser.open(recalls.lookup_page(vin))).pack(side="left")
+        LinkLabel(self.recall_links, "Service bulletins", lambda: webbrowser.open(
+            "https://www.google.com/search?q=" + urllib.parse.quote(f"{name} technical service bulletins"))).pack(
+            side="left", padx=(16, 0))
+        for r in found:
+            card = RoundPanel(self.recall_area.inner, pad=(20, 14), radius=16)
+            card.pack(fill="x", pady=(0, 10))
+            box = card.inner
+            tk.Label(box, text=r["component"] or "Recall", bg=C["panel"], fg=C["ink"], font=F(15, "bold"),
+                     anchor="w", justify="left").pack(fill="x")
+            tk.Label(box, text=f"Recall {r['campaign']}, reported {r['date']}", bg=C["panel"], fg=C["muted"],
+                     font=F(12), anchor="w").pack(fill="x")
+            if r["park_it"]:
+                tk.Label(box, text="NHTSA says: don't drive it until this is repaired.", bg=C["panel"],
+                         fg=C["red"], font=F(13, "bold"), anchor="w").pack(fill="x", pady=(4, 0))
+            for heading, text in (("What's wrong", r["summary"]), ("Risk", r["consequence"]),
+                                  ("Fix", r["remedy"])):
+                if not text:
+                    continue
+                tk.Label(box, text=heading, bg=C["panel"], fg=C["ink"], font=F(13, "bold"), anchor="w").pack(
+                    fill="x", pady=(6, 0))
+                lbl = tk.Label(box, text=text, bg=C["panel"], fg=C["ink"], font=F(13), anchor="w", justify="left")
+                lbl.pack(fill="x")
+                wrap_on_resize(lbl, 60)
 
     def _show_info(self, info):
         self.vehicle = info
@@ -1919,10 +2057,14 @@ class App:
         self.log_box.see("end")
 
     # --- misc ------------------------------------------------------------------------------------
-    def lookup_online(self, code):
+    def lookup_online(self, code, videos=False):
         base = code.split("-")[0]
-        make = self.vehicle.get("make", "")
-        q = f"{base} {make} code" if make and make != "-" else f"{base} code meaning"
+        ch = getattr(self, "chosen", None) or {}
+        car = " ".join(str(x) for x in (ch.get("year"), ch.get("make"), ch.get("model")) if x) or self._current_make()
+        if videos:
+            webbrowser.open("https://www.youtube.com/results?search_query=" + urllib.parse.quote(f"{base} {car} fix"))
+            return
+        q = f"{base} {car} code" if car else f"{base} code meaning"
         webbrowser.open("https://www.google.com/search?q=" + urllib.parse.quote(q))
 
     def save_report(self):
@@ -1943,7 +2085,9 @@ class App:
         for it in self.items:
             lines += [f"[{LEVELS[it['level']][3]}] {it['code']}  {it['info']['description']}",
                       f"    Found in: {it['module']}   Status: {it['status']}",
-                      f"    {why_it_matters(it['code'], it['status'], it['module'])}", ""]
+                      f"    {why_it_matters(it['code'], it['status'], it['module'])}"]
+            lines += [f"    {n}. {step}" for n, step in enumerate(it["info"].get("checks") or [], 1)]
+            lines.append("")
         if self.modules:
             lines += ["Modules that answered: " + ", ".join(m["name"] for m in self.modules)]
         with open(path, "w", encoding="utf-8") as f:

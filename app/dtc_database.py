@@ -11,6 +11,8 @@ named custom_codes.csv next to this file, one per line:   P1234,My description h
 """
 
 import csv
+
+import maker_codes
 import os
 import sys
 
@@ -324,25 +326,33 @@ def category_text(code):
     return " · ".join(parts)
 
 
-def describe_dtc(code):
-    """Return a dict with description, category, failure type and common causes."""
+def describe_dtc(code, make=""):
+    """Return a dict with description, category, failure type, common causes and steps to check it.
+    With the vehicle's make, factory (manufacturer-specific) codes get their real meaning too."""
     base, _, ftb = code.upper().partition("-")
-    desc = CUSTOM.get(code.upper()) or CUSTOM.get(base) or GENERIC.get(base)
+    desc = CUSTOM.get(code.upper()) or CUSTOM.get(base)
+    factory = None
+    if desc is None and len(base) == 5 and is_manufacturer_specific(base):
+        desc, factory = maker_codes.lookup(base, make)
+    if desc is None:
+        desc = GENERIC.get(base)
     known = desc is not None
     if not known:
         area = SYSTEMS.get(base[:1], "Unknown system").split(" (")[0].lower()
         if base[:1] == "P" and len(base) == 5 and base[2] in P_SUBSYSTEMS:
             area = P_SUBSYSTEMS[base[2]]
         if len(base) == 5 and base[0] in SYSTEMS and is_manufacturer_specific(base):
-            desc = f"Manufacturer-specific {area} code - double-click to look it up for your make"
+            desc = f"Manufacturer-specific {area} code - use Search for repair info to look it up for your make"
         else:
-            desc = f"{area[:1].upper() + area[1:]} code - not in the built-in list, double-click to look it up"
+            desc = f"{area[:1].upper() + area[1:]} code - not in the built-in list, use Search for repair info"
     return {
         "description": desc,
         "known": known,
         "category": category_text(base),
         "failure_type": describe_ftb(ftb) if ftb else "",
         "causes": common_causes(base),
+        "factory": factory,  # "Ford" / "GM" when the meaning came from that maker's list
+        "checks": maker_codes.check_steps(base, cause_key(base), make),
     }
 
 
@@ -444,47 +454,52 @@ _CAUSES = {
 
 
 def common_causes(code):
+    return _CAUSES.get(cause_key(code), "")
+
+
+def cause_key(code):
+    """Which group of usual causes a generic code belongs to ('' if none)."""
     c = code.upper().split("-")[0]
     if "P0300" <= c <= "P0312":
-        return _CAUSES["misfire"]
+        return "misfire"
     if c in ("P0171", "P0174", "P0170", "P0173", "P2187", "P2189"):
-        return _CAUSES["lean"]
+        return "lean"
     if c in ("P0172", "P0175", "P2188", "P2190"):
-        return _CAUSES["rich"]
+        return "rich"
     if c in ("P0420", "P0421", "P0430", "P0431"):
-        return _CAUSES["cat"]
+        return "cat"
     if "P0440" <= c <= "P0457":
-        return _CAUSES["evap"]
+        return "evap"
     if c in ("P0128", "P0125"):
-        return _CAUSES["thermostat"]
+        return "thermostat"
     if c in ("P0010", "P0011", "P0012", "P0013", "P0014", "P0015", "P0020", "P0021", "P0022"):
-        return _CAUSES["vvt"]
+        return "vvt"
     if c in ("P0016", "P0017", "P0018", "P0019"):
-        return _CAUSES["timing"]
+        return "timing"
     if "P0400" <= c <= "P0406":
-        return _CAUSES["egr"]
+        return "egr"
     if c in ("P0505", "P0506", "P0507"):
-        return _CAUSES["idle"]
+        return "idle"
     if ("P0030" <= c <= "P0058") or c in ("P0135", "P0141", "P0147", "P0155", "P0161", "P0167"):
-        return _CAUSES["o2heater"]
+        return "o2heater"
     if c in ("P0560", "P0562", "P0563", "P0620", "P0621", "P0622"):
-        return _CAUSES["voltage"]
+        return "voltage"
     if c == "P0700":
-        return _CAUSES["tcm"]
+        return "tcm"
     if "P0335" <= c <= "P0349" or c in ("P0365", "P0366"):
-        return _CAUSES["crankcam"]
+        return "crankcam"
     if "P0100" <= c <= "P0104":
-        return _CAUSES["maf"]
+        return "maf"
     if c.startswith("U0"):
-        return _CAUSES["network"]
+        return "network"
     if c in ("P0087", "P0088", "P0089", "P0190", "P0191", "P0192", "P0193"):
-        return _CAUSES["fuelpressure"]
+        return "fuelpressure"
     if c in ("P0234", "P0299"):
-        return _CAUSES["boost"]
+        return "boost"
     if c in ("P2096", "P2097", "P2098", "P2099"):
-        return _CAUSES["postcat"]
+        return "postcat"
     if c in ("C0035", "C0040", "C0045", "C0050"):
-        return _CAUSES["wheelspeed"]
+        return "wheelspeed"
     return ""
 
 

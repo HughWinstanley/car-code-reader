@@ -22,7 +22,7 @@ else:
     HERE = os.path.dirname(os.path.abspath(__file__))
 REQUIRED = ("car_code_reader.py", "obd_core.py", "dtc_database.py", "version.py")
 APP_MODULES = ("car_code_reader", "obd_core", "dtc_database", "icons", "vehicles", "version", "updater",
-               "j1939", "obd1")
+               "j1939", "obd1", "maker_codes", "recalls")
 
 
 def _bundle_hints():  # pragma: no cover - never called
