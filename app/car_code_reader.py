@@ -37,19 +37,19 @@ IS_MAC = sys.platform == "darwin"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONN_AUTO = "Find my adapter automatically"
 
-# --- Palette: a truck's instrument cluster on a calm steel-blue page --------------------
+# --- Palette: an instrument cluster at night. Black glass, warm amber needles, signal colors --
 C = {
-    "page": "#E9EEF2", "panel": "#FFFFFF", "ink": "#1B2A38", "muted": "#5B6B7A", "line": "#D5DEE6",
-    "header": "#1F3A5F", "header_hover": "#2A4D7A", "side": "#DCE4EB", "hover": "#F3F6F9",
-    "amber": "#E8A317", "amber_ink": "#8A5A00", "amber_soft": "#FCF1D6",
-    "red": "#C8322B", "red_soft": "#F8DEDC",
-    "green": "#2E8B57", "green_soft": "#DCEFE4",
-    "blue": "#2F6690", "blue_soft": "#E1ECF4",
-    "off": "#9AA7B2", "off_soft": "#EDF0F2",
+    "page": "#0C0F12", "panel": "#161B21", "raised": "#1E252D", "ink": "#E9EEF3", "muted": "#8F9BA7",
+    "line": "#262E37", "header": "#06080A", "header_hover": "#1A2026", "side": "#0A0D10", "hover": "#202830",
+    "amber": "#F2A93B", "amber_ink": "#F7C26B", "amber_soft": "#33280F",
+    "red": "#FF5D52", "red_soft": "#3A1A19",
+    "green": "#3DDC84", "green_soft": "#123222",
+    "blue": "#62B0F5", "blue_soft": "#142A3E",
+    "off": "#6D7884", "off_soft": "#1F252B", "steel": "#8FB3D6",
 }
 LEVELS = {  # urgency -> (bar color, pill background, pill text color, words)
     "high": (C["red"], C["red_soft"], C["red"], "Fix soon"),
-    "medium": (C["amber"], C["amber_soft"], C["amber_ink"], "Get it checked"),
+    "medium": (C["amber"], C["amber_soft"], C["amber_ink"], "Get it checked"),  # noqa: E241
     "low": (C["blue"], C["blue_soft"], C["blue"], "Low priority"),
     "past": (C["off"], C["off_soft"], C["muted"], "Past problem"),
 }
@@ -72,10 +72,10 @@ def F(size, weight="normal"):
 # ----------------------------------------------------------------------------
 class PillButton(tk.Canvas):
     STYLES = {
-        "primary": {"fill": C["header"], "hover": C["header_hover"], "text": "#FFFFFF", "outline": C["header"]},
-        "secondary": {"fill": C["panel"], "hover": C["hover"], "text": C["ink"], "outline": C["line"]},
-        "danger": {"fill": C["panel"], "hover": C["red_soft"], "text": C["red"], "outline": "#E8B4B0"},
-        "onheader": {"fill": C["header"], "hover": C["header_hover"], "text": "#FFFFFF", "outline": "#5C7A9E"},
+        "primary": {"fill": C["amber"], "hover": "#FFBE5C", "text": "#16110A", "outline": C["amber"]},
+        "secondary": {"fill": C["raised"], "hover": C["hover"], "text": C["ink"], "outline": C["raised"]},
+        "danger": {"fill": C["raised"], "hover": C["red_soft"], "text": C["red"], "outline": C["raised"]},
+        "onheader": {"fill": C["header"], "hover": C["header_hover"], "text": C["ink"], "outline": "#2C353F"},
     }
 
     def __init__(self, parent, text, command, kind="secondary", big=False):
@@ -125,7 +125,7 @@ class PillButton(tk.Canvas):
         pts = [1 + r, 1, w - r, 1, w, 1, w, 1 + r, w, h - r, w, h, w - r, h, 1 + r, h, 1, h, 1, h - r, 1, 1 + r, 1, 1]
         self.create_polygon(pts, smooth=True, fill=fill, outline=outline, width=1)
         if self.focus_displayof() == self and self.enabled:
-            self.create_polygon(pts, smooth=True, fill="", outline=C["amber"], width=2)
+            self.create_polygon(pts, smooth=True, fill="", outline=C["blue"], width=2)
         self.create_text(self.w / 2, self.h / 2, text=self.text, fill=text, font=self.font)
 
 
@@ -140,7 +140,7 @@ class LinkLabel(tk.Label):
 class Lamp(tk.Canvas):
     """The dashboard warning light: gray (not connected), amber/red (problems), green (all clear)."""
     STATES = {
-        "off": ("#B9C4CD", "#E2E8ED", "?"), "busy": (C["blue"], C["blue_soft"], "…"),
+        "off": ("#3A444E", "#1A2027", "?"), "busy": (C["blue"], C["blue_soft"], "…"),
         "ok": (C["green"], C["green_soft"], "✓"), "warn": (C["amber"], C["amber_soft"], "!"),
         "bad": (C["red"], C["red_soft"], "!"),
     }
@@ -166,13 +166,17 @@ class Lamp(tk.Canvas):
 
     def _draw(self):
         self.delete("all")
-        core, glow, glyph = self.STATES[self.state]
+        core, _soft, glyph = self.STATES[self.state]
         s = self.size
-        halo = glow if (self.state != "busy" or self._pulse) else C["page"]
-        self.create_oval(2, 2, s - 2, s - 2, fill=halo, outline="")
-        m = s * 0.17
+        if self.state != "off" and (self.state != "busy" or self._pulse):
+            icons.glow(self, s / 2, s / 2, s / 2 - 1, core, steps=14, strength=0.6)
+        m = s * 0.2
         self.create_oval(m, m, s - m, s - m, fill=core, outline="")
-        self.create_text(s / 2, s / 2 + 1, text=glyph, fill="#FFFFFF", font=F(int(s * 0.3), "bold"))
+        self.create_oval(m + s * 0.08, m + s * 0.05, s - m - s * 0.08, s / 2, fill=icons.blend(core, "#FFFFFF", 0.25),
+                         outline="")
+        self.create_oval(m + s * 0.04, m + s * 0.04, s - m - s * 0.04, s - m - s * 0.04, fill="", outline="")
+        self.create_text(s / 2, s / 2 + 1, text=glyph, fill="#0C0F12" if self.state != "off" else C["muted"],
+                         font=F(int(s * 0.28), "bold"))
 
 
 class ScrollArea(tk.Frame):
@@ -250,72 +254,126 @@ def as_sentences(text):
     return " ".join(p[0].upper() + p[1:] + ("" if p.endswith(".") else ".") for p in parts)
 
 
-class Tile(tk.Frame):
-    """A square-ish card: a drawn picture on top, a title and one line under it. Click to use."""
+class RoundPanel(tk.Canvas):
+    """A rounded card. Put widgets in .inner; the card grows to fit them."""
+
+    def __init__(self, parent, pad=(20, 16), radius=18, fill=None, outline=None, **kw):
+        super().__init__(parent, bg=parent["bg"], highlightthickness=0, bd=0, height=20, **kw)
+        self.fill, self.outline, self.radius = fill or C["panel"], outline or C["line"], radius
+        self.padx, self.pady = pad
+        self.inner = tk.Frame(self, bg=self.fill)
+        self._win = self.create_window(self.padx, self.pady, window=self.inner, anchor="nw")
+        self.inner.bind("<Configure>", self._fit, add="+")
+        self.bind("<Configure>", self._fit, add="+")
+
+    def _fit(self, _e=None):
+        w = self.winfo_width()
+        if w > 2 * self.padx:
+            self.itemconfigure(self._win, width=w - 2 * self.padx)
+        h = self.inner.winfo_reqheight() + 2 * self.pady
+        if int(float(self["height"])) != h:
+            self.configure(height=h)
+        self.delete("card")
+        icons.rounded_rect(self, 1, 1, max(w, 4) - 1, h - 1, self.radius, fill=self.fill, outline=self.outline,
+                           tags="card")
+        self.tag_lower("card")
+
+
+class Tile(tk.Canvas):
+    """A rounded card drawn on one canvas: a picture, a title and one line under it. Click to use."""
 
     def __init__(self, parent, title, subtitle, painter, command, width=210, art=96, title_size=15):
-        super().__init__(parent, bg=C["panel"], highlightbackground=C["line"], highlightthickness=1,
+        super().__init__(parent, width=width, height=art + 80, bg=parent["bg"], highlightthickness=0, bd=0,
                          cursor="hand2", takefocus=1)
+        self.surface = C["panel"]
         self.command = command
-        self.art = tk.Canvas(self, width=width - 2, height=art, bg=C["panel"], highlightthickness=0)
-        self.art.pack(pady=(14, 4))
-        painter(self.art, (width - 2) / 2, art / 2)
         longest = max((F(title_size, "bold").measure(w) for w in title.split()), default=0)
         while longest > width - 28 and title_size > 10:  # shrink rather than break a word in two
             title_size -= 1
             longest = max(F(title_size, "bold").measure(w) for w in title.split())
-        self.title = tk.Label(self, text=title, bg=C["panel"], fg=C["ink"], font=F(title_size, "bold"),
-                              wraplength=width - 24, justify="center")
-        self.title.pack(padx=12)
-        self.sub = tk.Label(self, text=subtitle, bg=C["panel"], fg=C["muted"], font=F(12),
-                            wraplength=width - 24, justify="center")
-        self.sub.pack(padx=12, pady=(2, 14))
-        if not subtitle:
-            self.sub.configure(pady=0)
-        for w in (self, self.art, self.title, self.sub):
-            w.bind("<Button-1>", lambda e: self.command())
-            w.bind("<Enter>", lambda e: self._hover(True))
-            w.bind("<Leave>", lambda e: self._hover(False))
+        top = 16
+        painter(self, width / 2, top + art / 2)
+        t = self.create_text(width / 2, top + art + 8, text=title, fill=C["ink"], font=F(title_size, "bold"),
+                             width=width - 24, justify="center", anchor="n")
+        y = self.bbox(t)[3] + 4
+        if subtitle:
+            st = self.create_text(width / 2, y, text=subtitle, fill=C["muted"], font=F(12), width=width - 28,
+                                  justify="center", anchor="n")
+            y = self.bbox(st)[3]
+        self.h = y + 18
+        self.configure(height=self.h)
+        self.w = width
+        self.card = None
+        self.set_height(self.h)
+        self.bind("<Button-1>", lambda e: self.command())
         self.bind("<Return>", lambda e: self.command())
-        self.bind("<FocusIn>", lambda e: self.configure(highlightbackground=C["amber"], highlightthickness=2))
-        self.bind("<FocusOut>", lambda e: self.configure(highlightbackground=C["line"], highlightthickness=1))
+        self.bind("<Enter>", lambda e: self.itemconfigure(self.card, outline=C["amber"]))
+        # (set_height draws the card)
+        self.bind("<Leave>", lambda e: self.itemconfigure(self.card, outline=C["line"]))
+        self.bind("<FocusIn>", lambda e: self.itemconfigure(self.card, outline=C["blue"], width=2))
+        self.bind("<FocusOut>", lambda e: self.itemconfigure(self.card, outline=C["line"], width=1))
 
-    def _hover(self, on):
-        self.configure(highlightbackground=C["blue"] if on else C["line"])
+
+def _tile_set_height(self, h):
+    self.h = h
+    self.configure(height=h)
+    if self.card:
+        self.delete(self.card)
+    self.card = icons.rounded_rect(self, 1, 1, self.w - 1, h - 1, 22, fill=C["panel"], outline=C["line"])
+    self.tag_lower(self.card)
+
+
+Tile.set_height = _tile_set_height
 
 
 def tile_grid(parent, tiles_spec, columns, width, **kw):
     """Lay out Tile widgets in a grid. tiles_spec: [(title, subtitle, painter, command), ...]"""
     grid = tk.Frame(parent, bg=C["page"])
     grid.pack(fill="x", anchor="w")
+    tiles = []
     for i, (title, sub, painter, cmd) in enumerate(tiles_spec):
-        Tile(grid, title, sub, painter, cmd, width=width, **kw).grid(
-            row=i // columns, column=i % columns, sticky="nsew", padx=(0, 14), pady=(0, 14))
+        t = Tile(grid, title, sub, painter, cmd, width=width, **kw)
+        t.grid(row=i // columns, column=i % columns, sticky="n", padx=(0, 16), pady=(0, 16))
+        tiles.append(t)
+    for r in range(0, len(tiles), columns):  # every card in a row gets the same height
+        row = tiles[r:r + columns]
+        tallest = max(t.h for t in row)
+        for t in row:
+            if t.h != tallest:
+                t.set_height(tallest)
     return grid
 
 
-class ProblemRow(tk.Frame):
-    """One problem: urgency bar, plain title, where it was found; click to expand the details."""
+class ProblemRow(RoundPanel):
+    """One problem as a rounded card: urgency dot and pill, plain title, where it was found.
+    Click to expand the details."""
 
     def __init__(self, parent, item, app):
-        super().__init__(parent, bg=C["panel"])
+        super().__init__(parent, pad=(20, 14), radius=16)
         self.item, self.app, self.open = item, app, False
-        bar_color, pill_bg, pill_fg, words = LEVELS[item["level"]]
-        tk.Frame(self, bg=bar_color, width=6).pack(side="left", fill="y")
-        self.body = tk.Frame(self, bg=C["panel"], padx=18, pady=12)
-        self.body.pack(side="left", fill="both", expand=True)
+        dot_color, pill_bg, pill_fg, words = LEVELS[item["level"]]
+        self.body = self.inner
         top = tk.Frame(self.body, bg=C["panel"])
         top.pack(fill="x")
-        tk.Label(top, text=words, bg=pill_bg, fg=pill_fg, font=F(12, "bold"), padx=10, pady=3).pack(side="right")
+        dot = tk.Canvas(top, width=18, height=22, bg=C["panel"], highlightthickness=0)
+        dot.surface = C["panel"]
+        icons.glow(dot, 9, 11, 9, dot_color, steps=6, strength=0.5)
+        dot.create_oval(5, 7, 13, 15, fill=dot_color, outline="")
+        dot.pack(side="left", padx=(0, 10), anchor="n", pady=(2, 0))
+        pill = tk.Canvas(top, bg=C["panel"], highlightthickness=0, height=26,
+                         width=F(12, "bold").measure(words) + 24)
+        icons.rounded_rect(pill, 1, 1, int(pill["width"]) - 1, 25, 13, fill=pill_bg, outline="")
+        pill.create_text(int(pill["width"]) / 2, 13, text=words, fill=pill_fg, font=F(12, "bold"))
+        pill.pack(side="right", anchor="n")
         self.title = tk.Label(top, text=item["info"]["description"], bg=C["panel"], fg=C["ink"],
                               font=F(15, "bold"), anchor="w", justify="left")
         self.title.pack(side="left", fill="x", expand=True)
-        wrap_on_resize(self.title, 190)
+        wrap_on_resize(self.title, 210)
         self.sub = tk.Label(self.body, text=f"{item['module']}, code {item['code']}. {item['status']}.",
                             bg=C["panel"], fg=C["muted"], font=F(12), anchor="w")
-        self.sub.pack(fill="x", pady=(2, 0))
+        self.sub.pack(fill="x", pady=(2, 0), padx=(28, 0))
         self.details = tk.Frame(self.body, bg=C["panel"])
-        for w in (self, self.body, top, self.title, self.sub):
+        for w in (self, self.body, top, self.title, self.sub, dot, pill):
             w.bind("<Button-1>", lambda e: self.toggle())
             w.configure(cursor="hand2")
 
@@ -323,7 +381,7 @@ class ProblemRow(tk.Frame):
         self.open = not self.open
         if self.open:
             self._fill_details()
-            self.details.pack(fill="x", pady=(10, 2))
+            self.details.pack(fill="x", pady=(10, 2), padx=(28, 0))
         else:
             self.details.pack_forget()
 
@@ -343,7 +401,7 @@ class ProblemRow(tk.Frame):
             lbl = tk.Label(self.details, text=text, bg=C["panel"], fg=C["ink"], font=F(13), anchor="w",
                            justify="left")
             lbl.pack(fill="x")
-            lbl.configure(wraplength=max(300, self.body.winfo_width() - 40))
+            lbl.configure(wraplength=max(300, self.body.winfo_width() - 70))
         row = tk.Frame(self.details, bg=C["panel"])
         row.pack(fill="x", pady=(10, 0))
         PillButton(row, "Search for repair info", lambda: self.app.lookup_online(self.item["code"])).pack(side="left")
@@ -363,11 +421,24 @@ class App:
         root.configure(bg=C["page"])
         style = ttk.Style()
         try:
-            style.theme_use("aqua" if IS_MAC else "clam")
+            style.theme_use("clam")
         except tk.TclError:
             pass
-        style.configure("Lamp.Horizontal.TProgressbar", troughcolor=C["line"], background=C["blue"],
-                        bordercolor=C["page"], lightcolor=C["blue"], darkcolor=C["blue"])
+        style.configure("Lamp.Horizontal.TProgressbar", troughcolor=C["raised"], background=C["amber"],
+                        bordercolor=C["page"], lightcolor=C["amber"], darkcolor=C["amber"], thickness=6)
+        style.configure("Vertical.TScrollbar", background=C["raised"], troughcolor=C["page"], bordercolor=C["page"],
+                        arrowcolor=C["muted"], lightcolor=C["raised"], darkcolor=C["raised"], gripcount=0)
+        style.map("Vertical.TScrollbar", background=[("active", C["hover"])])
+        for w in ("TEntry", "TCombobox"):
+            style.configure(w, fieldbackground=C["raised"], foreground=C["ink"], background=C["raised"],
+                            bordercolor=C["line"], lightcolor=C["raised"], darkcolor=C["raised"],
+                            insertcolor=C["ink"], arrowcolor=C["muted"], padding=6)
+        style.map("TCombobox", fieldbackground=[("readonly", C["raised"]), ("disabled", C["panel"])],
+                  foreground=[("disabled", C["muted"])])
+        root.option_add("*TCombobox*Listbox.background", C["raised"])
+        root.option_add("*TCombobox*Listbox.foreground", C["ink"])
+        root.option_add("*TCombobox*Listbox.selectBackground", C["amber"])
+        root.option_add("*TCombobox*Listbox.selectForeground", "#16110A")
         self.elm = None
         self.q = queue.Queue()
         self.busy = False
@@ -444,35 +515,33 @@ class App:
 
     # --- layout --------------------------------------------------------------------------
     def _build(self):
-        head = tk.Frame(self.root, bg=C["header"], padx=18, pady=12)
+        head = tk.Frame(self.root, bg=C["header"], padx=20, pady=14)
         head.pack(fill="x")
+        tk.Frame(self.root, bg=C["line"], height=1).pack(fill="x")
         if self._icon is not None:
             small = self._icon.subsample(max(1, self._icon.width() // 34))
             self._small_icon = small
             tk.Label(head, image=small, bg=C["header"]).pack(side="left", padx=(0, 10))
         tk.Label(head, text=APP_NAME, bg=C["header"], fg="#FFFFFF", font=F(17, "bold")).pack(side="left")
         self.disconnect_btn = PillButton(head, "Disconnect", self.disconnect, kind="onheader")
-        self.vehicle_lbl = tk.Label(head, text="", bg=C["header"], fg="#C9D6E3", font=F(13))
+        self.vehicle_lbl = tk.Label(head, text="", bg=C["header"], fg=C["amber_ink"], font=F(13, "bold"))
         self.vehicle_lbl.pack(side="right", padx=(0, 12))
 
         body = tk.Frame(self.root, bg=C["page"])
         body.pack(fill="both", expand=True)
-        side = tk.Frame(body, bg=C["side"], width=190, pady=14)
+        side = tk.Frame(body, bg=C["side"], width=200, pady=18)
         side.pack(side="left", fill="y")
         side.pack_propagate(False)
         self.nav = {}
         for name in self.PAGES:
-            row = tk.Frame(side, bg=C["side"], cursor="hand2")
-            row.pack(fill="x")
-            bar = tk.Frame(row, bg=C["side"], width=4)
-            bar.pack(side="left", fill="y")
-            lbl = tk.Label(row, text=name, bg=C["side"], fg=C["ink"], font=F(14), anchor="w", padx=16, pady=10)
-            lbl.pack(side="left", fill="x", expand=True)
-            for w in (row, lbl):
-                w.bind("<Button-1>", lambda e, n=name: self.show_page(n))
-            self.nav[name] = (row, bar, lbl)
+            item = tk.Canvas(side, width=176, height=42, bg=C["side"], highlightthickness=0, cursor="hand2")
+            item.pack(padx=12, pady=2, anchor="w")
+            item.bind("<Button-1>", lambda e, n=name: self.show_page(n))
+            item.bind("<Enter>", lambda e, n=name: self._nav_draw(n, hover=True))
+            item.bind("<Leave>", lambda e, n=name: self._nav_draw(n))
+            self.nav[name] = item
 
-        self.main = tk.Frame(body, bg=C["page"], padx=28, pady=22)
+        self.main = tk.Frame(body, bg=C["page"], padx=34, pady=26)
         self.main.pack(side="left", fill="both", expand=True)
         self.pages = {
             "Home": self._build_home(),
@@ -487,19 +556,28 @@ class App:
     def show_page(self, name):
         if name == "Home":
             self.refresh_home()
-        nav_name = "Home" if name == "Choose vehicle" else name
-        for n, (row, bar, lbl) in self.nav.items():
-            sel = n == nav_name
-            bg = C["page"] if sel else C["side"]
-            row.configure(bg=bg)
-            lbl.configure(bg=bg, font=F(14, "bold" if sel else "normal"))
-            bar.configure(bg=C["amber"] if sel else bg)
+        self.nav_selected = "Home" if name == "Choose vehicle" else name
+        for n in self.nav:
+            self._nav_draw(n)
         for n, frame in self.pages.items():
             if n == name:
                 frame.pack(fill="both", expand=True)
             else:
                 frame.pack_forget()
         self.current_page = name
+
+    def _nav_draw(self, name, hover=False):
+        cv = self.nav[name]
+        cv.delete("all")
+        sel = name == getattr(self, "nav_selected", "")
+        if sel or hover:
+            icons.rounded_rect(cv, 0, 1, 175, 41, 14, fill=C["raised"] if sel else C["panel"], outline="")
+        if sel:
+            cv.surface = C["raised"]
+            icons.glow(cv, 18, 21, 9, C["amber"], steps=5, strength=0.45)
+            cv.create_oval(14, 17, 22, 25, fill=C["amber"], outline="")
+        cv.create_text(34, 21, text=name, anchor="w", fill=C["ink"] if sel or hover else C["muted"],
+                       font=F(14, "bold" if sel else "normal"))
 
     def _page_title(self, parent, title, subtitle=""):
         tk.Label(parent, text=title, bg=C["page"], fg=C["ink"], font=F(22, "bold"), anchor="w").pack(fill="x")
@@ -515,28 +593,30 @@ class App:
     def _build_home(self):
         page = tk.Frame(self.main, bg=C["page"])
         self._page_title(page, "What do you want to check?")
-        self.update_bar = tk.Frame(page, bg=C["amber_soft"], padx=16, pady=10)
+        self.update_bar_card = RoundPanel(page, pad=(18, 12), fill=C["amber_soft"], outline=C["amber_soft"])
+        self.update_bar = self.update_bar_card.inner
         self.home_vehicle = tk.Frame(page, bg=C["page"])
         self.home_vehicle.pack(fill="x", pady=(10, 18))
-        s, ink, amber = 64, C["header"], C["amber_ink"]
+        s, ink, amber = 64, C["steel"], C["amber"]
 
         def art(name, color=ink):
-            return lambda cv, x, y: icons.draw(cv, name, x, y, s, color, F(int(s * 0.17), "bold"))
+            return lambda cv, x, y: icons.draw(cv, name, x, y, s, color, F(int(s * 0.17), "bold"), halo=True)
 
         def both(cv, x, y):
-            icons.draw(cv, "abs", x - s * 0.52, y, s * 0.9, C["red"], F(int(s * 0.15), "bold"))
-            icons.draw(cv, "airbag", x + s * 0.52, y, s * 0.9, C["red"])
+            icons.glow(cv, x, y, s * 0.95, C["red"])
+            icons.draw(cv, "abs", x - s * 0.5, y, s * 0.85, C["red"], F(int(s * 0.14), "bold"))
+            icons.draw(cv, "airbag", x + s * 0.5, y, s * 0.85, C["red"])
 
         tile_grid(page, [
             ("Engine codes", "Check-engine and transmission codes", art("engine", amber),
              lambda: self.start_scan("engine")),
             ("ABS and airbag", "Brake and airbag warning lights", both, lambda: self.start_scan("safety")),
             ("Full scan", "Everything at once", art("scan"), lambda: self.start_scan("all")),
-            ("Live data", "Engine readings in real time", art("gauge"), self.open_live),
+            ("Live data", "Engine readings in real time", art("gauge", C["ink"]), self.open_live),
             ("Smog check", "Ready for an emissions test?", art("smog", C["green"]),
              lambda: self.show_page("Smog check")),
-            ("Choose vehicle", "Make, model and year", art("vehicle"), self.open_picker),
-        ], columns=3, width=230)
+            ("Choose vehicle", "Make, model and year", art("vehicle", C["blue"]), self.open_picker),
+        ], columns=3, width=236, art=100)
         return page
 
     def refresh_home(self):
@@ -545,10 +625,11 @@ class App:
             w.destroy()
         ch = self.chosen
         if ch:
-            cv = tk.Canvas(box, width=58, height=58, bg=C["page"], highlightthickness=0)
+            cv = tk.Canvas(box, width=70, height=70, bg=C["page"], highlightthickness=0)
             cv.pack(side="left", padx=(0, 14))
             letters = vehicles.MAKES[ch["make"]][0]
-            icons.make_badge(cv, letters, 29, 29, 56, icons.badge_color(ch["make"]),
+            icons.glow(cv, 35, 35, 35, icons.badge_color(ch["make"]), steps=8, strength=0.35)
+            icons.make_badge(cv, letters, 35, 35, 56, icons.badge_color(ch["make"]),
                              F(16 if len(letters) < 3 else 13, "bold"))
             txt = tk.Frame(box, bg=C["page"])
             txt.pack(side="left")
@@ -586,7 +667,7 @@ class App:
         for w in bar.winfo_children():
             w.destroy()
         if not rel:
-            bar.pack_forget()
+            self.update_bar_card.pack_forget()
             if not quiet:
                 self.update_status.configure(text=f"You have the latest version ({VERSION}).")
             return
@@ -597,7 +678,7 @@ class App:
             tk.Label(bar, text=notes, bg=C["amber_soft"], fg=C["ink"], font=F(13), anchor="w",
                      wraplength=420, justify="left").pack(side="left", padx=(10, 0))
         PillButton(bar, "Update now", self.install_update, kind="primary").pack(side="right")
-        bar.pack(fill="x", pady=(8, 0), before=self.home_vehicle)
+        self.update_bar_card.pack(fill="x", pady=(8, 0), before=self.home_vehicle)
         if hasattr(self, "update_status"):
             self.update_status.configure(text=f"Version {rel['version']} is available. Use Update now on Home.")
 
@@ -687,7 +768,8 @@ class App:
                 letters = vehicles.MAKES[make][0]
 
                 def painter(cv, x, y, mk=make, lt=letters):
-                    icons.make_badge(cv, lt, x, y, 62, icons.badge_color(mk), F(17 if len(lt) < 3 else 14, "bold"))
+                    icons.glow(cv, x, y, 52, icons.badge_color(mk), steps=8, strength=0.35)
+                    icons.make_badge(cv, lt, x, y, 64, icons.badge_color(mk), F(17 if len(lt) < 3 else 14, "bold"))
                 spec.append((make, vehicles.support_text(make), painter, lambda mk=make: self._pick_set_make(mk)))
             tile_grid(inner, spec, columns=5, width=150, art=70, title_size=14)
         elif step == "model":
@@ -699,10 +781,10 @@ class App:
                 if q and q not in model.lower():
                     continue
                 body = {"t": "truck", "s": "suv", "c": "car", "v": "van"}[kind]
-                spec.append((model, "", lambda cv, x, y, b=body: icons.draw(cv, b, x, y, 58, C["header"]),
+                spec.append((model, "", lambda cv, x, y, b=body: icons.draw(cv, b, x, y, 62, C["steel"]),
                              lambda m=model, k=kind: self._pick_set_model(m, k)))
             spec.append(("Other model", "Not in the list", lambda cv, x, y: icons.draw(
-                cv, "car", x, y, 58, C["off"]), lambda: self._pick_set_model("", "c")))
+                cv, "car", x, y, 62, C["off"]), lambda: self._pick_set_model("", "c")))
             tile_grid(inner, spec, columns=5, width=150, art=56, title_size=14)
         else:
             self.pick_title.configure(text="Choose the year")
@@ -846,16 +928,15 @@ class App:
             self.subline.configure(text=light + extra + ("Click a problem for what it means and what usually "
                                                          "fixes it." if self.items else ""))
         for item in self.items:
-            ProblemRow(inner, item, self).pack(fill="x")
-            tk.Frame(inner, bg=C["line"], height=1).pack(fill="x")
+            ProblemRow(inner, item, self).pack(fill="x", pady=(0, 10))
         if self.scanned and self.scan_kind != "engine":
             self._modules_note(inner)
         self._update_controls()
 
     def _connect_panel(self, parent):
-        box = tk.Frame(parent, bg=C["panel"], padx=22, pady=18, highlightbackground=C["line"],
-                       highlightthickness=1)
-        box.pack(fill="x", pady=(6, 0))
+        card = RoundPanel(parent, pad=(24, 18))
+        card.pack(fill="x", pady=(6, 0))
+        box = card.inner
         tk.Label(box, text="No adapter yet?", bg=C["panel"], fg=C["ink"], font=F(15, "bold"),
                  anchor="w").pack(fill="x")
         row = tk.Frame(box, bg=C["panel"])
@@ -1008,6 +1089,8 @@ class App:
             self.scan(kind=self.scan_kind)  # straight into the scan that was asked for
 
         self.lamp.set("busy")
+        if getattr(self, "current_page", "") in ("Home", "Choose vehicle"):
+            self.show_page("Problems")
         self.run_bg(work, done, "Looking for the adapter…")
 
     def disconnect(self):
@@ -1182,9 +1265,9 @@ class App:
         grid.pack(fill="x")
         self.tiles = {}
         for i, pid in enumerate(pids):
-            tile = tk.Frame(grid, bg=C["panel"], padx=16, pady=12, highlightbackground=C["line"],
-                            highlightthickness=1)
-            tile.grid(row=i // 3, column=i % 3, sticky="nsew", padx=(0, 10), pady=(0, 10))
+            card = RoundPanel(grid, pad=(18, 14), radius=18)
+            card.grid(row=i // 3, column=i % 3, sticky="nsew", padx=(0, 12), pady=(0, 12))
+            tile = card.inner
             value = tk.Label(tile, text="…", bg=C["panel"], fg=C["ink"], font=F(24, "bold"), anchor="w")
             value.pack(fill="x")
             alt = tk.Label(tile, text="", bg=C["panel"], fg=C["muted"], font=F(12), anchor="w")
@@ -1255,9 +1338,9 @@ class App:
             return rows
 
         def done(rows):
-            box = tk.Frame(self.tiles_area.inner, bg=C["panel"], padx=18, pady=14, highlightbackground=C["line"],
-                           highlightthickness=1)
-            box.pack(fill="x", pady=(14, 0))
+            card = RoundPanel(self.tiles_area.inner, pad=(22, 16))
+            card.pack(fill="x", pady=(14, 0))
+            box = card.inner
             tk.Label(box, text="Freeze frame", bg=C["panel"], fg=C["ink"], font=F(15, "bold"),
                      anchor="w").grid(row=0, column=0, columnspan=2, sticky="w")
             if not rows:
@@ -1271,7 +1354,7 @@ class App:
                     row=i + 2, column=0, sticky="w", pady=2)
                 tk.Label(box, text=value, bg=C["panel"], fg=C["ink"], font=F(13, "bold"), anchor="w").grid(
                     row=i + 2, column=1, sticky="w", padx=(24, 0))
-            self.tiles_area.scroll_to(box)
+            self.tiles_area.scroll_to(card)
 
         self.run_bg(work, done, "Reading the freeze frame…")
 
@@ -1325,8 +1408,9 @@ class App:
         w = tk.Label(inner, text=why, bg=C["page"], fg=C["ink"], font=F(13), anchor="w", justify="left")
         w.pack(fill="x", pady=(2, 14))
         wrap_on_resize(w, 20)
-        box = tk.Frame(inner, bg=C["panel"], highlightbackground=C["line"], highlightthickness=1)
-        box.pack(fill="x")
+        card = RoundPanel(inner, pad=(4, 8))
+        card.pack(fill="x")
+        box = card.inner
         for i, (name, supported, incomplete) in enumerate(rows):
             if i:
                 tk.Frame(box, bg=C["line"], height=1).pack(fill="x")
@@ -1349,8 +1433,9 @@ class App:
     def _build_vehicle(self):
         page = tk.Frame(self.main, bg=C["page"])
         self._page_title(page, "Vehicle", "What the vehicle and adapter report about themselves.")
-        box = tk.Frame(page, bg=C["panel"], padx=22, pady=16, highlightbackground=C["line"], highlightthickness=1)
-        box.pack(fill="x")
+        card = RoundPanel(page, pad=(24, 18))
+        card.pack(fill="x")
+        box = card.inner
         self.info_vars = {}
         fields = (("title", "Vehicle"), ("vin", "VIN"), ("voltage", "Battery"), ("protocol", "Language it speaks"),
                   ("ecus", "Computers answering"), ("adapter", "Adapter"))
@@ -1423,7 +1508,8 @@ class App:
         self.log_toggle.pack(side="left")
         PillButton(bar, "Copy log", self._copy_log).pack(side="left", padx=10)
         self.log_box = ScrolledText(page, height=14, font=("Menlo" if IS_MAC else "Courier", 11), relief="flat",
-                                    highlightbackground=C["line"], highlightthickness=1)
+                                    highlightbackground=C["line"], highlightthickness=1, bg=C["panel"],
+                                    fg=C["ink"], insertbackground=C["ink"])
         return page
 
     def _toggle_log(self):
