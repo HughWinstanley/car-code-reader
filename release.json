@@ -1,8 +1,8 @@
 {
-  "version": "2.11",
-  "notes": "Every page now matches Home: colored pictures in the side menu, page headings and empty pages.",
+  "version": "2.12",
+  "notes": "You can now update right from the Help page too.",
   "files": {
-    "car_code_reader.py": "31de4ed8d7b8b8cab242f24a81f3617315a2a3f1fa633112cf8d718cc142d460",
+    "car_code_reader.py": "4d942c3fb0715e7f24fbe766555c29760aa857bcf88dfa56220e8971449b6d65",
     "obd_core.py": "4fcbbea157c8b6ba0d6caf493d138297eba9003cd501c6c205f89994f3205cb5",
     "dtc_database.py": "a1a338f2f1f5645585eb41feffbbe0610a0ef6a53ac10a407ea3bc901c70390c",
     "icons.py": "d145cfee5871c8fc16ddeb81c7c9497ffd553e949d4e6d3cee0d248050864f14",

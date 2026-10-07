@@ -530,7 +530,7 @@ class App:
     def log(self, text):
         self.ui(lambda: self._append_log(text))
 
-    def run_bg(self, work, done=None, step="Working…"):
+    def run_bg(self, work, done=None, step="Working…", on_error=None):
         if self.busy:
             return
         self.busy = True
@@ -542,14 +542,16 @@ class App:
                 result, err = work(), None
             except Exception as e:  # noqa: BLE001 - every failure is shown to the user
                 result, err = None, e
-            self.ui(lambda: self._finish(result, err, done))
+            self.ui(lambda: self._finish(result, err, done, on_error))
 
         threading.Thread(target=wrap, daemon=True).start()
 
-    def _finish(self, result, err, done):
+    def _finish(self, result, err, done, on_error=None):
         self.busy = False
         self.set_step("")
         self._update_controls()
+        if err is not None and on_error:
+            on_error(err)
         if err is not None:
             self._append_log(f"ERROR: {err}")
             self.refresh_problems()
@@ -784,6 +786,8 @@ class App:
         bar = self.update_bar
         for w in bar.winfo_children():
             w.destroy()
+        if hasattr(self, "help_update_btn"):
+            self.help_update_btn.pack_forget()
         if not rel:
             self.update_bar_card.pack_forget()
             if not quiet:
@@ -798,7 +802,9 @@ class App:
         PillButton(bar, "Update now", self.install_update, kind="primary").pack(side="right")
         self.update_bar_card.pack(fill="x", pady=(8, 0), before=self.home_vehicle)
         if hasattr(self, "update_status"):
-            self.update_status.configure(text=f"Version {rel['version']} is available. Use Update now on Home.")
+            self.update_status.configure(text=f"Version {rel['version']} is available.")
+            self.help_update_btn.set_enabled(True)
+            self.help_update_btn.pack(side="left", padx=(12, 0))
 
     def check_updates(self):
         self.update_status.configure(text="Checking…")
@@ -814,7 +820,10 @@ class App:
 
         def work():
             def progress(i, n, name):
-                self.ui(lambda: self.set_step(f"Downloading update ({i + 1} of {n})…", (i + 1) / n))
+                def show():
+                    self.set_step(f"Downloading update ({i + 1} of {n})…", (i + 1) / n)
+                    self.update_status.configure(text=f"Downloading update ({i + 1} of {n})…")
+                self.ui(show)
             updater.install(rel, progress)
             return rel["version"]
 
@@ -825,8 +834,15 @@ class App:
             self.root.destroy()
             updater.restart()
 
-        self.show_page("Problems")
-        self.run_bg(work, done, "Downloading update…")
+        self.help_update_btn.set_enabled(False)
+        self.update_status.configure(text="Downloading update…")
+        if self.current_page != "Help":  # on Help, stay put: progress shows next to the button
+            self.show_page("Problems")
+
+        def failed(err):
+            self.help_update_btn.set_enabled(True)
+            self.update_status.configure(text="The update didn't finish. Try again.")
+        self.run_bg(work, done, "Downloading update…", on_error=failed)
 
     # --- 1995 and older: blink-code guide ----------------------------------------------------
     OBD1_GROUPS = [("GM", "GM", "Chevy, GMC, Buick, Cadillac, Olds, Pontiac"),
@@ -1864,6 +1880,7 @@ class App:
             LinkLabel(ver, "Check for updates", self.check_updates).pack(side="left", padx=12)
         self.update_status = tk.Label(ver, text="", bg=C["page"], fg=C["muted"], font=F(13))
         self.update_status.pack(side="left")
+        self.help_update_btn = PillButton(ver, "Update now", self.install_update, kind="primary")
         bar = tk.Frame(page, bg=C["page"])
         bar.pack(fill="x")
         self.log_toggle = PillButton(bar, "Show adapter log", self._toggle_log)
