@@ -42,7 +42,7 @@ CONN_AUTO = "Find my adapter automatically"
 # --- Palette: white paper, black ink. Color is kept only for status (red, amber, green) --------
 C = {
     "page": "#FFFFFF", "panel": "#FFFFFF", "raised": "#F3F3F3", "ink": "#000000", "muted": "#6B6B6B",
-    "line": "#E2E2E2", "header": "#000000", "header_hover": "#2A2A2A", "side": "#FFFFFF", "hover": "#F3F3F3",
+    "line": "#E2E2E2", "header": "#FFFFFF", "header_hover": "#F3F3F3", "side": "#FFFFFF", "hover": "#F3F3F3",
     "black": "#000000",
     "amber": "#E39A12", "amber_ink": "#8A5A00", "amber_soft": "#FFF3DC",
     "red": "#D9362B", "red_soft": "#FDE6E4",
@@ -101,7 +101,7 @@ class PillButton(tk.Canvas):
         "primary": {"fill": "#000000", "hover": "#2A2A2A", "text": "#FFFFFF", "outline": "#000000"},
         "secondary": {"fill": "#FFFFFF", "hover": "#F3F3F3", "text": "#000000", "outline": "#000000"},
         "danger": {"fill": "#FFFFFF", "hover": C["red_soft"], "text": C["red"], "outline": C["red"]},
-        "onheader": {"fill": "#000000", "hover": "#2A2A2A", "text": "#FFFFFF", "outline": "#FFFFFF"},
+        "onheader": {"fill": "#FFFFFF", "hover": "#F3F3F3", "text": "#000000", "outline": "#000000"},
     }
 
     def __init__(self, parent, text, command, kind="secondary", big=False, min_width=0):
@@ -554,14 +554,15 @@ class App:
     def _build(self):
         head = tk.Frame(self.root, bg=C["header"], padx=20, pady=14)
         head.pack(fill="x")
+        tk.Frame(self.root, bg=C["line"], height=1).pack(fill="x")
 
         if self._icon is not None:
             small = self._icon.subsample(max(1, self._icon.width() // 34))
             self._small_icon = small
             tk.Label(head, image=small, bg=C["header"]).pack(side="left", padx=(0, 10))
-        tk.Label(head, text=APP_NAME, bg=C["header"], fg="#FFFFFF", font=F(17, "bold")).pack(side="left")
+        tk.Label(head, text=APP_NAME, bg=C["header"], fg="#000000", font=F(17, "bold")).pack(side="left")
         self.disconnect_btn = PillButton(head, "Disconnect", self.disconnect, kind="onheader")
-        self.vehicle_lbl = tk.Label(head, text="", bg=C["header"], fg="#FFFFFF", font=F(13, "bold"))
+        self.vehicle_lbl = tk.Label(head, text="", bg=C["header"], fg="#000000", font=F(13, "bold"))
         self.vehicle_lbl.pack(side="right", padx=(0, 12))
 
         body = tk.Frame(self.root, bg=C["page"])

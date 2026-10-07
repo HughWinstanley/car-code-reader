@@ -1,8 +1,8 @@
 {
-  "version": "2.9",
-  "notes": "Restarts correctly in the new stand-alone Mac app (no Python needed).",
+  "version": "2.10",
+  "notes": "White top bar with a black title.",
   "files": {
-    "car_code_reader.py": "8879d84fb2fe638b9b0127d1e897d4ad0029d2e8f620b84c64867d9cd06a9f19",
+    "car_code_reader.py": "e44cff869e9f2035a5ee6a6dda69c64ecc24f71cab6c98009533e049917c7c3a",
     "obd_core.py": "4fcbbea157c8b6ba0d6caf493d138297eba9003cd501c6c205f89994f3205cb5",
     "dtc_database.py": "a1a338f2f1f5645585eb41feffbbe0610a0ef6a53ac10a407ea3bc901c70390c",
     "icons.py": "3e5c45919ee6779df8024c01672b23fc26b3bbe43a3f0daa9f3d3ee3be6dd3e6",
