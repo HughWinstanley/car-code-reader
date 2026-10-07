@@ -23,11 +23,13 @@ import tkinter.font as tkfont
 from tkinter import ttk, messagebox, filedialog
 from tkinter.scrolledtext import ScrolledText
 
-from obd_core import (CONN_SERIAL, CONN_WIFI, CONN_DEMO, CONN_DEMO_OLD, ECU_NAMES, MS, PIDS,
+from obd_core import (CONN_SERIAL, CONN_WIFI, CONN_DEMO, CONN_DEMO_OLD, CONN_DEMO_SEMI, ECU_NAMES, MS, PIDS,
                       decode_readiness, format_pid, list_ports, make_from_vin, open_adapter,
                       year_from_vin)
 from dtc_database import decode_dtc_bytes, describe_dtc, severity, uds_status_text, why_it_matters
 import icons
+import j1939
+import obd1
 import updater
 import vehicles
 from version import VERSION
@@ -391,7 +393,7 @@ class ProblemRow(RoundPanel):
         for w in self.details.winfo_children():
             w.destroy()
         it, info = self.item, self.item["info"]
-        parts = [("Why it matters", why_it_matters(it["code"], it["status"], it["module"])),
+        parts = [("Why it matters", it.get("why") or why_it_matters(it["code"], it["status"], it["module"])),
                  ("Common causes", info["causes"]),
                  ("How it failed", info["failure_type"].split(": ", 1)[-1] if info["failure_type"] else ""),
                  ("About this code", as_sentences(info["category"]))]
@@ -549,6 +551,7 @@ class App:
         self.pages = {
             "Home": self._build_home(),
             "Choose vehicle": self._build_picker(),
+            "1995 and older": self._build_obd1(),
             "Problems": self._build_problems(),
             "Live data": self._build_live(),
             "Smog check": self._build_smog(),
@@ -559,7 +562,7 @@ class App:
     def show_page(self, name):
         if name == "Home":
             self.refresh_home()
-        self.nav_selected = "Home" if name == "Choose vehicle" else name
+        self.nav_selected = "Home" if name in ("Choose vehicle", "1995 and older") else name
         for n in self.nav:
             self._nav_draw(n)
         for n, frame in self.pages.items():
@@ -598,28 +601,30 @@ class App:
         self.home_vehicle.pack(fill="x", pady=(10, 18))
         s = 64
         tint = {"engine": "#E08A00", "safety": "#D9362B", "scan": "#6C4BD1", "gauge": "#0F8B8D",
-                "smog": "#1E8A4A", "vehicle": "#1F6FD1"}
+                "smog": "#1E8A4A", "vehicle": "#1F6FD1", "semi": "#B4532A", "old": "#7A5A2E"}
 
         def art(name, key):
             return lambda cv, x, y: icons.draw(cv, name, x, y, s, tint[key], F(int(s * 0.17), "bold"), halo=True)
 
         def both(cv, x, y):
             red = tint["safety"]
-            cv.create_oval(x - s * 1.15, y - s * 0.72, x + s * 1.15, y + s * 0.72,
+            cv.create_oval(x - s * 1.05, y - s * 0.68, x + s * 1.05, y + s * 0.68,
                            fill=icons.blend("#FFFFFF", red, 0.13), outline="")
-            icons.draw(cv, "abs", x - s * 0.5, y, s * 0.85, red, F(int(s * 0.14), "bold"))
-            icons.draw(cv, "airbag", x + s * 0.5, y, s * 0.85, red)
+            icons.draw(cv, "abs", x - s * 0.46, y, s * 0.78, red, F(int(s * 0.13), "bold"))
+            icons.draw(cv, "airbag", x + s * 0.46, y, s * 0.78, red)
 
         tile_grid(page, [
             ("Engine codes", "Check-engine and transmission codes", art("engine", "engine"),
              lambda: self.start_scan("engine")),
             ("ABS and airbag", "Brake and airbag warning lights", both, lambda: self.start_scan("safety")),
             ("Full scan", "Everything at once", art("scan", "scan"), lambda: self.start_scan("all")),
+            ("Semi trucks", "Heavy-duty trucks, 9-pin port", art("semi", "semi"), self.start_semi),
             ("Live data", "Engine readings in real time", art("gauge", "gauge"), self.open_live),
             ("Smog check", "Ready for an emissions test?", art("smog", "smog"),
              lambda: self.show_page("Smog check")),
+            ("1995 and older", "Read blink codes, no adapter", art("blink", "old"), lambda: self.open_obd1()),
             ("Choose vehicle", "Make, model and year", art("vehicle", "vehicle"), self.open_picker),
-        ], columns=3, width=236, art=100)
+        ], columns=4, width=184, art=92, title_size=14)
         return page
 
     def refresh_home(self):
@@ -655,12 +660,34 @@ class App:
 
     def start_scan(self, kind):
         """Home-screen tiles: connect first if needed, then run that kind of scan."""
+        ch = self.chosen
+        if ch and int(ch["year"]) < 1996:  # OBD-I: no data port standard, use the blink-code guide
+            if kind == "safety":
+                messagebox.showinfo(APP_NAME, "On 1995 and older vehicles, ABS and airbag codes use separate, "
+                                              "maker-specific blink procedures that this app doesn't cover yet.\n\n"
+                                              "Engine codes are covered: use Engine codes or 1995 and older.")
+                return
+            self.open_obd1(obd1.group_for(ch["family"]))
+            return
         self.scan_kind = kind
         self.show_page("Problems")
+        if self.elm and self.elm.is_j1939:
+            self.disconnect()
         if self.elm:
             self.scan(kind=kind)
         elif not self.busy:
-            self.connect()
+            self.connect(heavy=False)
+
+    def start_semi(self):
+        """Semi trucks: connect to the J1939 network (needs a 9-pin truck cable) and read every module."""
+        self.scan_kind = "all"
+        self.show_page("Problems")
+        if self.elm and not self.elm.is_j1939:
+            self.disconnect()
+        if self.elm:
+            self.scan()
+        elif not self.busy:
+            self.connect(heavy=True)
 
     # --- Updates ----------------------------------------------------------------------------
     def _update_found(self, rel, quiet=False):
@@ -711,6 +738,125 @@ class App:
 
         self.show_page("Problems")
         self.run_bg(work, done, "Downloading update…")
+
+    # --- 1995 and older: blink-code guide ----------------------------------------------------
+    OBD1_GROUPS = [("GM", "GM", "Chevy, GMC, Buick, Cadillac, Olds, Pontiac"),
+                   ("Ford", "FD", "Ford, Lincoln, Mercury"),
+                   ("Chrysler", "CHR", "Chrysler, Dodge, Jeep, Plymouth"),
+                   ("Toyota", "TY", "Toyota and Lexus"),
+                   ("Honda", "HO", "Honda and Acura")]
+
+    def _build_obd1(self):
+        page = tk.Frame(self.main, bg=C["page"])
+        top = tk.Frame(page, bg=C["page"])
+        top.pack(fill="x")
+        LinkLabel(top, "Back", self._obd1_back).pack(side="left")
+        self.o1_title = tk.Label(page, text="", bg=C["page"], fg=C["ink"], font=F(22, "bold"), anchor="w",
+                                 justify="left")
+        self.o1_title.pack(fill="x", pady=(6, 0))
+        wrap_on_resize(self.o1_title, 20)
+        self.o1_sub = tk.Label(page, text="", bg=C["page"], fg=C["muted"], font=F(13), anchor="w", justify="left")
+        self.o1_sub.pack(fill="x", pady=(2, 10))
+        wrap_on_resize(self.o1_sub, 20)
+        self.o1_area = ScrollArea(page, C["page"])
+        self.o1_area.pack(fill="both", expand=True)
+        self.o1_group = None
+        self.o1_entry = tk.StringVar()
+        return page
+
+    def open_obd1(self, group=None):
+        self.o1_group = group
+        self.o1_entry.set("")
+        self.show_page("1995 and older")
+        self._obd1_fill()
+
+    def _obd1_back(self):
+        if self.o1_group:
+            self.o1_group = None
+            self._obd1_fill()
+        else:
+            self.show_page("Home")
+
+    def _obd1_fill(self):
+        self.o1_area.clear()
+        inner = self.o1_area.inner
+        group = self.o1_group
+        if not group:
+            self.o1_title.configure(text="Read codes on 1995 and older vehicles")
+            self.o1_sub.configure(text="These vehicles blink their codes on the check-engine light instead of "
+                                       "sending them to an adapter. Pick the make and the app shows you how.")
+            spec = []
+            for key, letters, makes in self.OBD1_GROUPS:
+                def painter(cv, x, y, lt=letters):
+                    icons.make_badge(cv, lt, x, y, 62, "#1E1E1E", F(17 if len(lt) < 3 else 14, "bold"))
+                spec.append((key, makes, painter, lambda k=key: self.open_obd1(k)))
+            tile_grid(inner, spec, columns=4, width=170, art=72, title_size=15)
+            return
+        guide = obd1.GUIDES[group]
+        self.o1_title.configure(text=guide["title"])
+        self.o1_sub.configure(text="Follow the steps, count the flashes, then type the codes below.")
+        warn = RoundPanel(inner, pad=(18, 12), fill=C["amber_soft"], outline=C["amber_soft"])
+        warn.pack(fill="x", pady=(0, 14))
+        lbl = tk.Label(warn.inner, text=obd1.SAFETY, bg=C["amber_soft"], fg=C["ink"], font=F(13), anchor="w",
+                       justify="left")
+        lbl.pack(fill="x")
+        wrap_on_resize(lbl, 10)
+        steps = tk.Frame(inner, bg=C["page"])
+        steps.pack(fill="x")
+        steps.grid_columnconfigure(1, weight=1)
+        for i, text in enumerate(guide["steps"], 1):
+            num = tk.Canvas(steps, width=30, height=30, bg=C["page"], highlightthickness=0)
+            num.create_oval(2, 2, 28, 28, fill="#000000", outline="")
+            num.create_text(15, 15, text=str(i), fill="#FFFFFF", font=F(13, "bold"))
+            num.grid(row=i, column=0, sticky="nw", pady=5)
+            t = tk.Label(steps, text=text, bg=C["page"], fg=C["ink"], font=F(14), anchor="w", justify="left")
+            t.grid(row=i, column=1, sticky="we", padx=(12, 0), pady=7)
+            steps.bind("<Configure>", lambda e, lb=t: lb.winfo_exists() and lb.configure(
+                wraplength=max(300, e.width - 60)), add="+")
+        if guide["note"]:
+            tk.Label(inner, text=guide["note"], bg=C["page"], fg=C["muted"], font=F(12), anchor="w",
+                     justify="left").pack(fill="x", pady=(8, 0))
+        row = tk.Frame(inner, bg=C["page"])
+        row.pack(fill="x", pady=(18, 0))
+        tk.Label(row, text="Codes you counted", bg=C["page"], fg=C["ink"], font=F(14, "bold")).pack(side="left")
+        entry = ttk.Entry(row, textvariable=self.o1_entry, width=24, font=F(14))
+        entry.pack(side="left", padx=10)
+        entry.bind("<Return>", lambda e: self._obd1_explain())
+        PillButton(row, "Explain codes", self._obd1_explain, kind="primary").pack(side="left")
+        tk.Label(inner, text="Separate codes with spaces or commas, for example: 12 33 44", bg=C["page"],
+                 fg=C["muted"], font=F(12), anchor="w").pack(fill="x", pady=(4, 0))
+        self.o1_results = tk.Frame(inner, bg=C["page"])
+        self.o1_results.pack(fill="x", pady=(14, 0))
+        if self.o1_entry.get().strip():
+            self._obd1_explain()
+
+    def _obd1_explain(self):
+        for w in self.o1_results.winfo_children():
+            w.destroy()
+        codes = obd1.parse_entry(self.o1_entry.get())
+        if not codes:
+            tk.Label(self.o1_results, text="Type the numbers you counted first.", bg=C["page"], fg=C["muted"],
+                     font=F(13), anchor="w").pack(fill="x")
+            return
+        pills = {"ok": ("Not a fault", C["green_soft"], C["green"]),
+                 "fault": ("Problem", C["amber_soft"], C["amber_ink"]),
+                 "unknown": ("Not in list", C["off_soft"], C["muted"])}
+        for code in codes:
+            meaning, kind = obd1.explain(self.o1_group, code)
+            card = RoundPanel(self.o1_results, pad=(20, 12), radius=16)
+            card.pack(fill="x", pady=(0, 10))
+            row = card.inner
+            tk.Label(row, text=code, bg=C["panel"], fg=C["ink"], font=F(22, "bold"), width=4, anchor="w").pack(
+                side="left")
+            words, bg, fg = pills[kind]
+            pill = tk.Canvas(row, bg=C["panel"], highlightthickness=0, height=26, width=F(12, "bold").measure(words) + 24)
+            icons.rounded_rect(pill, 1, 1, int(pill["width"]) - 1, 25, 13, fill=bg, outline="")
+            pill.create_text(int(pill["width"]) / 2, 13, text=words, fill=fg, font=F(12, "bold"))
+            pill.pack(side="right")
+            t = tk.Label(row, text=meaning, bg=C["panel"], fg=C["ink"], font=F(14), anchor="w", justify="left")
+            t.pack(side="left", fill="x", expand=True, padx=(8, 12))
+            wrap_on_resize(t, 220)
+        self.o1_area.scroll_to(self.o1_results)
 
     # --- Vehicle picker -----------------------------------------------------------------------
     def _build_picker(self):
@@ -792,12 +938,15 @@ class App:
             self.pick_trail.configure(text=f"{self.pick_make} {self.pick_model}".strip())
             grid = tk.Frame(inner, bg=C["page"])
             grid.pack(fill="x", anchor="w")
-            ys = [y for y in vehicles.years() if not q or q in str(y)]
+            ys = [y for y in vehicles.years(self.pick_make) if not q or q in str(y)]
             for i, y in enumerate(ys):
                 b = PillButton(grid, str(y), lambda yr=y: self._pick_set_year(yr), big=True)
                 b.grid(row=i // 7, column=i % 7, padx=(0, 10), pady=(0, 10), sticky="w")
-            tk.Label(inner, text="1995 and older vehicles mostly use OBD-I, which this kind of adapter can't read.",
-                     bg=C["page"], fg=C["muted"], font=F(12), anchor="w").pack(fill="x", pady=(8, 0))
+            older = obd1.group_for(vehicles.family_of(self.pick_make))
+            note = ("1995 and older: the app walks you through reading the blink codes, no adapter needed."
+                    if older else "1995 and older vehicles mostly use OBD-I, which this app can't read for this make.")
+            tk.Label(inner, text=note, bg=C["page"], fg=C["muted"], font=F(12), anchor="w").pack(
+                fill="x", pady=(8, 0))
 
     def _pick_set_make(self, make):
         self.pick_make, self.pick_step = make, "model"
@@ -944,9 +1093,11 @@ class App:
         row.pack(fill="x", pady=(4, 0))
         tk.Label(row, text="Try everything with a pretend vehicle:", bg=C["panel"], fg=C["muted"],
                  font=F(13)).pack(side="left")
-        LinkLabel(row, "2012 Ford", lambda: self.connect(CONN_DEMO)).pack(side="left", padx=(8, 0))
+        LinkLabel(row, "2012 Ford", lambda: self.connect(CONN_DEMO, heavy=False)).pack(side="left", padx=(8, 0))
         tk.Label(row, text="or", bg=C["panel"], fg=C["muted"], font=F(13)).pack(side="left", padx=6)
-        LinkLabel(row, "2004 GM truck", lambda: self.connect(CONN_DEMO_OLD)).pack(side="left")
+        LinkLabel(row, "2004 GM truck", lambda: self.connect(CONN_DEMO_OLD, heavy=False)).pack(side="left")
+        tk.Label(row, text="or", bg=C["panel"], fg=C["muted"], font=F(13)).pack(side="left", padx=6)
+        LinkLabel(row, "semi truck", lambda: self.connect(CONN_DEMO_SEMI, heavy=True)).pack(side="left")
 
         opts = tk.Frame(parent, bg=C["page"])
         opts.pack(fill="x", pady=(14, 0))
@@ -1045,9 +1196,13 @@ class App:
             self.live_btn.set_text("Stop" if self.live_running else "Start live data")
 
     # --- connect -----------------------------------------------------------------------------
-    def connect(self, kind=None):
+    def connect(self, kind=None, heavy=None):
         kind = kind or self.conn_kind.get()
         target = self.port_var.get().strip()
+        if heavy is None:
+            heavy = getattr(self, "heavy", False)
+        heavy = heavy or kind == CONN_DEMO_SEMI
+        self.heavy = heavy
 
         def work():
             if kind == CONN_AUTO:
@@ -1072,9 +1227,13 @@ class App:
                             "Then click Connect again, or pick the port yourself under Connection options.")
             else:
                 elm = open_adapter(kind, target, self.log)
-            self.ui(lambda: self.set_step("Talking to the vehicle… (finding its language can take 20 seconds)"))
+            self.ui(lambda: self.set_step("Listening to the truck's network…" if heavy else
+                                          "Talking to the vehicle… (finding its language can take 20 seconds)"))
             try:
-                elm.initialize()
+                if heavy:
+                    j1939.initialize(elm)
+                else:
+                    elm.initialize()
                 info = self._gather_info(elm)
             except Exception:
                 elm.close()
@@ -1107,6 +1266,16 @@ class App:
         self.refresh_smog()
 
     def _gather_info(self, elm):
+        if elm.is_j1939:
+            vin = j1939.read_vin(elm)
+            self._vin = vin
+            year = year_from_vin(vin)
+            return {
+                "title": f"{year} semi truck" if year else "Semi truck",
+                "vin": vin or "Not reported", "make": "-", "year": str(year) if year else "-",
+                "voltage": elm.voltage(), "protocol": elm.protocol_name, "adapter": elm.version,
+                "ecus": ", ".join(j1939.source_name(a) for a in elm.ecus) or "-",
+            }
         vin = elm.read_vin()
         self._vin = vin
         make = make_from_vin(vin)
@@ -1132,6 +1301,19 @@ class App:
         self.scan_kind = kind
         self.scan_stop.clear()
         self._scanning = True
+
+        if elm.is_j1939:
+            def heavy_work():
+                self.ui(lambda: self.set_step("Listening for trouble codes from every module…", 0.3))
+                return j1939.read_codes(elm)
+
+            def heavy_done(mods):
+                self._scanning = False
+                self._apply_j1939(mods)
+
+            self.lamp.set("busy")
+            self.run_bg(heavy_work, heavy_done, "Reading the truck's codes…")
+            return
 
         def work():
             obd, ready, modules = [], None, []
@@ -1196,6 +1378,51 @@ class App:
         if hook:
             hook()
 
+    AFTERTREATMENT = {1761, 3031, 3216, 3226, 3242, 3246, 3251, 3364, 3719, 3720, 4364, 5246}
+
+    def _apply_j1939(self, mods):
+        items = []
+        for m in mods:
+            red, amber = m["lamps"].get("Red stop lamp"), m["lamps"].get("Amber warning lamp")
+            for spn, fmi, oc, active in [(s, f, o, True) for s, f, o in m["active"]] + \
+                                        [(s, f, o, False) for s, f, o in m["previous"]]:
+                if active:
+                    status = "Active now" + (f", seen {oc} times" if oc > 1 else "")
+                    level = "high" if red or m["sa"] == 11 else "medium"
+                else:
+                    status, level = "Previously active", "past"
+                if not active:
+                    why = "This happened before but isn't active now. Often it's an intermittent wiring fault."
+                elif red:
+                    why = "The red stop lamp is on. Stop when it's safe and get this checked before driving on."
+                elif m["sa"] == 11:
+                    why = ("ABS may be switched off for that wheel or the whole truck. Normal air brakes still work, "
+                           "but wheels can lock in a hard stop.")
+                elif spn in self.AFTERTREATMENT:
+                    why = ("This is in the emissions (DPF/DEF/SCR) system. If it's ignored, the engine can "
+                           "reduce power and speed until it's fixed.")
+                elif amber:
+                    why = "The amber warning lamp is on. Get this checked soon."
+                else:
+                    why = "Have this checked at your next service."
+                items.append({
+                    "code": f"SPN {spn} FMI {fmi}", "module": m["name"], "status": status, "resp": "",
+                    "level": level, "why": why,
+                    "info": {"description": j1939.describe(spn, fmi), "known": spn in j1939.SPN,
+                             "category": f"Heavy-duty (J1939) code from the {m['name'].lower()} module. SPN {spn} "
+                                         f"is the part, FMI {fmi} is how it failed.",
+                             "failure_type": "", "causes": ""}})
+        items.sort(key=lambda i: LEVEL_ORDER[i["level"]])
+        self.items, self.scanned = items, True
+        self.modules = [{"name": m["name"], "target": m["sa"], "dtcs": m["active"], "bus": "j1939"} for m in mods]
+        self.readiness = None
+        self.mil_on = any(m["lamps"].get("Check engine (malfunction) lamp") for m in mods)
+        self.refresh_problems()
+        self.refresh_smog()
+        hook, self._after_scan_hook = getattr(self, "_after_scan_hook", None), None
+        if hook:
+            hook()
+
     @staticmethod
     def _item(code, module, status, resp=""):
         return {"code": code, "module": module, "status": status, "resp": resp,
@@ -1215,6 +1442,11 @@ class App:
         self._scanning = False
 
         def work():
+            if elm.is_j1939:
+                self.ui(lambda: self.set_step("Clearing codes in every module…", 0.3))
+                j1939.clear_codes(elm)
+                time.sleep(1.5)
+                return True
             self.ui(lambda: self.set_step("Clearing engine codes…", 0.2))
             elm.clear_obd()
             if targets:
@@ -1260,12 +1492,13 @@ class App:
         tk.Label(self.tiles_area.inner, text="Connect to the vehicle, then click Start live data.",
                  bg=C["page"], fg=C["muted"], font=F(13), anchor="w").pack(fill="x")
 
-    def _make_tiles(self, pids):
+    def _make_tiles(self, entries):
+        """entries: [(key, name)]"""
         self.tiles_area.clear()
         grid = tk.Frame(self.tiles_area.inner, bg=C["page"])
         grid.pack(fill="x")
         self.tiles = {}
-        for i, pid in enumerate(pids):
+        for i, (pid, name) in enumerate(entries):
             card = RoundPanel(grid, pad=(18, 14), radius=18)
             card.grid(row=i // 3, column=i % 3, sticky="nsew", padx=(0, 12), pady=(0, 12))
             tile = card.inner
@@ -1273,7 +1506,7 @@ class App:
             value.pack(fill="x")
             alt = tk.Label(tile, text="", bg=C["panel"], fg=C["muted"], font=F(12), anchor="w")
             alt.pack(fill="x")
-            tk.Label(tile, text=PIDS[pid][0], bg=C["panel"], fg=C["ink"], font=F(13), anchor="w", justify="left",
+            tk.Label(tile, text=name, bg=C["panel"], fg=C["ink"], font=F(13), anchor="w", justify="left",
                      wraplength=220).pack(fill="x")
             self.tiles[pid] = (value, alt)
         for col in range(3):
@@ -1300,9 +1533,15 @@ class App:
 
         def worker():
             try:
+                if elm.is_j1939:
+                    self.ui(lambda: self._make_tiles(j1939.LIVE_NAMES))
+                    while not self.live_stop.is_set():
+                        for key, txt in j1939.read_live(elm, 1.0).items():
+                            self.ui(lambda k=key, t=txt: self._set_tile(k, t))
+                    return
                 sup = elm.supported_pids()
                 pids = [p for p in PIDS if p in sup] or [0x0C, 0x0D, 0x05]
-                self.ui(lambda: self._make_tiles(pids))
+                self.ui(lambda: self._make_tiles([(p, PIDS[p][0]) for p in pids]))
                 while not self.live_stop.is_set():
                     for pid in pids:
                         if self.live_stop.is_set():
@@ -1326,6 +1565,10 @@ class App:
 
     def read_freeze_frame(self):
         elm = self.elm
+        if elm and elm.is_j1939:
+            messagebox.showinfo(APP_NAME, "Semi trucks keep snapshot data in maker-specific formats, so the freeze "
+                                          "frame isn't available here. Live data works.")
+            return
 
         def work():
             first = elm.query_pid(2, 2, b"\x00")

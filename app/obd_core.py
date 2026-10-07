@@ -35,6 +35,7 @@ CONN_SERIAL = "USB / Bluetooth (serial port)"
 CONN_WIFI = "Wi-Fi adapter"
 CONN_DEMO = "Demo mode (no car needed)"
 CONN_DEMO_OLD = "Demo mode - 2004 GM truck"
+CONN_DEMO_SEMI = "Demo mode - semi truck"
 
 # ----------------------------------------------------------------------------
 # Live-data definitions:  PID -> (name, decoder, unit)
@@ -611,6 +612,38 @@ class ELM327:
     def request(self, cmd, timeout=5.0):
         return self.parse(self.send(cmd, timeout))
 
+    @property
+    def is_j1939(self):
+        return self.protocol == "J"
+
+    def monitor(self, cmd, seconds):
+        """Listen to the bus for `seconds` (STMA/ATMA), then stop. Returns the lines received."""
+        with self.lock:
+            self.t.flush_input()
+            self.t.write((cmd + "\r").encode("ascii"))
+            buf, end = b"", time.time() + seconds
+            while time.time() < end:
+                buf += self.t.read()
+            self.t.write(b"\r")
+            end = time.time() + 2
+            while time.time() < end:
+                chunk = self.t.read()
+                if chunk:
+                    buf += chunk
+                    if b">" in buf:
+                        break
+            text = buf.decode("ascii", errors="ignore").replace(">", "")
+            lines = [ln.strip() for ln in re.split(r"[\r\n]+", text) if ln.strip()]
+            lines = [ln for ln in lines if ln.upper() not in ("STOPPED", "OK", "?", cmd.upper())]
+            self.log(f"> {cmd} for {seconds:.1f} s: {len(lines)} messages")
+            for ln in lines[:12]:
+                self.log(f"< {ln}")
+            if len(lines) > 12:
+                self.log(f"< … {len(lines) - 12} more")
+            if any("BUFFER FULL" in ln.upper() for ln in lines):
+                self.log("  (adapter buffer overflowed - an OBDLink adapter avoids this)")
+            return lines
+
     def initialize(self):
         self.send("ATZ", timeout=4)
         for c in ("ATE0", "ATL0", "ATS0", "ATH1", "ATAT1", "ATSP0"):
@@ -974,6 +1007,9 @@ class ELM327:
 def open_adapter(kind, target, log):
     if kind == CONN_DEMO:
         return ELM327(DemoTransport(), log)
+    if kind == CONN_DEMO_SEMI:
+        from j1939 import DemoSemiTransport
+        return ELM327(DemoSemiTransport(), log)
     if kind == CONN_DEMO_OLD:
         return ELM327(DemoOldGMTransport(), log)
     if kind == CONN_WIFI:

@@ -203,6 +203,37 @@ def _body(cv, cx, cy, s, c, kind):
                        outline="")
 
 
+def _semi(cv, cx, cy, s, c):
+    """Tractor-trailer side view."""
+    u = s / 10
+    bg = _bg(cv)
+    base = cy + 1.4 * u
+    cv.create_rectangle(cx - 4.8 * u, cy - 2.6 * u, cx + 1.2 * u, base - 0.3 * u, fill=c, outline="")  # trailer
+    cab = [cx + 1.6 * u, base - 0.3 * u, cx + 1.6 * u, cy - 1.9 * u, cx + 3.3 * u, cy - 1.9 * u,
+           cx + 4.6 * u, cy - 0.4 * u, cx + 4.6 * u, base - 0.3 * u]
+    cv.create_polygon(cab, fill=c, outline=c, width=2, joinstyle="round")
+    cv.create_polygon([cx + 2.2 * u, cy - 0.5 * u, cx + 2.2 * u, cy - 1.4 * u, cx + 3.1 * u, cy - 1.4 * u,
+                       cx + 3.9 * u, cy - 0.5 * u], fill=blend(bg, c, 0.25), outline="")
+    cv.create_line(cx + 1.6 * u, cy - 2.6 * u, cx + 1.6 * u, cy - 1.9 * u, fill=c, width=max(2, s / 28))  # stack
+    for x in (cx - 3.9 * u, cx - 2.7 * u, cx + 2.4 * u, cx + 3.8 * u):
+        r = 0.6 * u
+        cv.create_oval(x - r - 0.15 * u, base - r - 0.15 * u, x + r + 0.15 * u, base + r + 0.15 * u, fill=bg,
+                       outline="")
+        cv.create_oval(x - r, base - r, x + r, base + r, fill="#1A1F25", outline="")
+
+
+def _blink(cv, cx, cy, s, c):
+    """A check-engine light giving off flashes: reading blink codes."""
+    u = s / 10
+    _engine(cv, cx, cy + 0.8 * u, s * 0.72, c)
+    w = max(2, s / 22)
+    for ang in (-150, -120, -90, -60, -30):
+        a = math.radians(ang)
+        x0, y0 = cx + math.cos(a) * 3.2 * u, cy + 0.4 * u + math.sin(a) * 3.2 * u
+        x1, y1 = cx + math.cos(a) * 4.4 * u, cy + 0.4 * u + math.sin(a) * 4.4 * u
+        cv.create_line(x0, y0, x1, y1, fill=c, width=w, capstyle="round")
+
+
 def draw(cv, name, cx, cy, size, color, small_font=None, halo=False):
     if halo:  # a soft disc behind the icon
         r = size * 0.72
@@ -219,5 +250,9 @@ def draw(cv, name, cx, cy, size, color, small_font=None, halo=False):
         _gauge(cv, cx, cy, size, color)
     elif name == "smog":
         _smog(cv, cx, cy, size, color)
+    elif name == "semi":
+        _semi(cv, cx, cy, size, color)
+    elif name == "blink":
+        _blink(cv, cx, cy, size, color)
     elif name in ("truck", "suv", "car", "van", "vehicle"):
         _body(cv, cx, cy, size, color, "truck" if name == "vehicle" else name)

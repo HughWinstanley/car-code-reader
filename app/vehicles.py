@@ -12,8 +12,17 @@ import datetime
 FIRST_YEAR = 1996
 
 
-def years():
-    return list(range(datetime.date.today().year + 1, FIRST_YEAR - 1, -1))
+OBD1_FIRST_YEAR = 1981
+
+
+def years(make=None):
+    """Newest first. Makes with a blink-code guide also go back to 1981 (OBD-I)."""
+    first = FIRST_YEAR
+    if make:
+        import obd1
+        if obd1.group_for(family_of(make)):
+            first = OBD1_FIRST_YEAR
+    return list(range(datetime.date.today().year + 1, first - 1, -1))
 
 
 def _m(text):

@@ -1,13 +1,15 @@
 {
-  "version": "2.5",
-  "notes": "Colorful icons on the home screen.",
+  "version": "2.6",
+  "notes": "Semi trucks (J1939) and a blink-code guide for 1995 and older vehicles.",
   "files": {
-    "car_code_reader.py": "c4532d8d4e97ff48094a8d4361c0bb4adcbe8f19a784bce5d789bbec1eeb744c",
-    "obd_core.py": "0b1b6127848c150b3c9d432e96116cec1afa2fdcabb074e27a25186c16e2e837",
+    "car_code_reader.py": "8cd5d1826a9e8fef9711570d955371904797304065539f1a87f5849f77d0e94f",
+    "obd_core.py": "4fcbbea157c8b6ba0d6caf493d138297eba9003cd501c6c205f89994f3205cb5",
     "dtc_database.py": "a1a338f2f1f5645585eb41feffbbe0610a0ef6a53ac10a407ea3bc901c70390c",
-    "icons.py": "dc5cc4465920a1fceb3ed2f0b54ab7b90803247b1b19ef0be2b36b23bed39bc0",
-    "vehicles.py": "56c9200e53c1f2a6636c4bacb292c65272b29c9d8d1267707f0785591cbbff25",
+    "icons.py": "3e5c45919ee6779df8024c01672b23fc26b3bbe43a3f0daa9f3d3ee3be6dd3e6",
+    "vehicles.py": "ff0f91ac337565aa7fd279db819b80f7071582a89b5a08228556acaf4988fed8",
     "updater.py": "7592050d0b436b149454fb214d98284a19e60aae87bdfe43c3a01965801cf980",
+    "j1939.py": "3f9db2423781380ede9f4f40d40037383cf978bc46c265cfb6dbed242801e360",
+    "obd1.py": "99da383acb7eb6fa18604500f05ec623214af6c10b0ffc9f00b56f0ea56db70e",
     "icon.png": "635873108e9b9e6e7bd54b68695ad71151c96e2ff78cad1ed53db48a13a2f71c"
   }
 }

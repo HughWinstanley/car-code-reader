@@ -61,6 +61,19 @@ The pages on the left:
 
 No adapter yet? On the first screen, click **2012 Ford** or **2004 GM truck** to try everything with a pretend vehicle. If the automatic search can't find your adapter, open **Connection options** and pick the port yourself.
 
+## Semi trucks and 1995-and-older vehicles
+
+- **Semi trucks (heavy-duty, J1939, about 2007 and newer):** click **Semi trucks** on Home. You need a
+  9-pin Deutsch to OBD-II cable (green 9-pin on 2016+ trucks). The app reads active and previously
+  active codes from every module (engine, transmission, ABS, aftertreatment...), shows live engine data,
+  and can clear codes. The OBDLink EX is for 12-volt systems, which covers most US trucks.
+- **1995 and older (OBD-I):** click **1995 and older** on Home (or pick a pre-1996 vehicle). The app walks
+  you through making the check-engine light blink the codes for GM, Ford/Lincoln/Mercury,
+  Chrysler/Dodge/Jeep/Plymouth, Toyota/Lexus and Honda/Acura; type in what you count and it explains them.
+  No adapter needed.
+- Not covered: pre-2007 semis on the older J1708 network, OBD-I ABS/airbag codes, and reading GM ALDL data
+  with a cable.
+
 ## Honest limits
 
 - **Engine codes** are standardized and work on every 1996+ car.
