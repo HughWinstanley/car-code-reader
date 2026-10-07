@@ -37,7 +37,7 @@ jobs:
         run: |
           set -e
           EXCL=""
-          for m in car_code_reader obd_core dtc_database icons vehicles version updater j1939 obd1 maker_codes recalls; do
+          for m in car_code_reader obd_core dtc_database icons vehicles version updater j1939 obd1 maker_codes recalls service_guides; do
             EXCL="$EXCL --exclude-module $m"
           done
           python -m PyInstaller --noconfirm --clean --windowed \

@@ -24,13 +24,15 @@ from tkinter import ttk, messagebox, filedialog
 from tkinter.scrolledtext import ScrolledText
 
 from obd_core import (CONN_SERIAL, CONN_WIFI, CONN_DEMO, CONN_DEMO_OLD, CONN_DEMO_SEMI, ECU_NAMES, MS, PIDS,
-                      decode_readiness, format_pid, list_ports, make_from_vin, open_adapter,
+                      EXTENDED, decode_readiness, format_pid, format_value, list_ports, make_from_vin, open_adapter,
                       year_from_vin)
 from dtc_database import decode_dtc_bytes, describe_dtc, severity, uds_status_text, why_it_matters
 import icons
 import j1939
+import maker_codes
 import obd1
 import recalls
+import service_guides
 import updater
 import vehicles
 from version import VERSION
@@ -61,9 +63,11 @@ LEVEL_ORDER = {"high": 0, "medium": 1, "low": 2, "past": 3}
 
 # The colors used for the pictures on Home; the other pages and the side menu use the same ones.
 TINT = {"engine": "#E08A00", "safety": "#D9362B", "scan": "#6C4BD1", "gauge": "#0F8B8D", "smog": "#1E8A4A",
-        "vehicle": "#1F6FD1", "semi": "#B4532A", "old": "#7A5A2E", "home": "#222222", "help": "#5E7488"}
+        "vehicle": "#1F6FD1", "semi": "#B4532A", "old": "#7A5A2E", "home": "#222222", "help": "#5E7488",
+        "service": "#B03E6E"}
 PAGE_ICON = {"Home": ("home", "home"), "Problems": ("alert", "engine"), "Live data": ("gauge", "gauge"),
-             "Smog check": ("smog", "smog"), "Vehicle": ("vehicle", "vehicle"), "Help": ("help", "help")}
+             "Smog check": ("smog", "smog"), "Vehicle": ("vehicle", "vehicle"), "Service": ("wrench", "service"),
+             "Help": ("help", "help")}
 
 _FONTS = {}
 
@@ -483,7 +487,7 @@ class ProblemRow(RoundPanel):
 # The app
 # ----------------------------------------------------------------------------
 class App:
-    PAGES = ["Home", "Problems", "Live data", "Smog check", "Vehicle", "Help"]
+    PAGES = ["Home", "Problems", "Live data", "Smog check", "Vehicle", "Service", "Help"]
 
     def __init__(self, root):
         self.root = root
@@ -636,6 +640,7 @@ class App:
             "Live data": self._build_live(),
             "Smog check": self._build_smog(),
             "Vehicle": self._build_vehicle(),
+            "Service": self._build_service(),
             "Help": self._build_help(),
         }
 
@@ -651,6 +656,8 @@ class App:
             else:
                 frame.pack_forget()
         self.current_page = name
+        if name == "Service" and hasattr(self, "service_area"):
+            self.refresh_service()
         if name == "Vehicle" and hasattr(self, "recall_btn"):
             make, model, year, vin, _ = self._recall_vehicle()
             if (vin or (make and model and year)) and self._recalls_for != (make, model, year, vin):
@@ -1708,7 +1715,15 @@ class App:
                     return
                 sup = elm.supported_pids()
                 pids = [p for p in PIDS if p in sup] or [0x0C, 0x0D, 0x05]
-                self.ui(lambda: self._make_tiles([(p, PIDS[p][0]) for p in pids]))
+                # factory readings for this make: keep only the ones that answer with a believable value
+                extra = {}
+                for did, spec in EXTENDED.get(maker_codes.family(self._current_make()), {}).items():
+                    v = self._read_extended(elm, did, spec)
+                    if v is not None:
+                        extra[("x", did)] = (did, spec)
+                tiles = [(p, PIDS[p][0]) for p in pids] + [(k, spec[0] + " (factory)") for k, (_d, spec) in
+                                                           extra.items()]
+                self.ui(lambda: self._make_tiles(tiles))
                 while not self.live_stop.is_set():
                     for pid in pids:
                         if self.live_stop.is_set():
@@ -1717,6 +1732,10 @@ class App:
                         if d is not None:
                             txt = format_pid(pid, d)
                             self.ui(lambda p=pid, t=txt: self._set_tile(p, t))
+                    for key, (did, spec) in extra.items():
+                        v = self._read_extended(elm, did, spec)
+                        if v is not None:
+                            self.ui(lambda k=key, t=format_value(v, spec[2]): self._set_tile(k, t))
             except Exception as e:  # noqa: BLE001
                 msg = str(e)
                 self.ui(lambda: messagebox.showerror(APP_NAME, f"Live data stopped: {msg}"))
@@ -1724,6 +1743,19 @@ class App:
                 self.ui(self._live_ended)
 
         threading.Thread(target=worker, daemon=True).start()
+
+    @staticmethod
+    def _read_extended(elm, did, spec):
+        """One factory reading -> value, or None if it didn't answer or the number isn't believable."""
+        try:
+            d = elm.query_did(did)
+            if not d:
+                return None
+            v = spec[1](d)
+        except (IndexError, ValueError, TypeError):
+            return None
+        lo, hi = spec[3]
+        return v if lo <= v <= hi else None
 
     def _live_ended(self):
         self.live_running = False
@@ -1988,6 +2020,81 @@ class App:
 
     def refresh_info(self):
         self.run_bg(lambda: self._gather_info(self.elm), self._show_info, "Reading vehicle info…")
+
+    # --- Service page: relearns, resets and bleeding ------------------------------------------------
+    def _build_service(self):
+        page = tk.Frame(self.main, bg=C["page"])
+        self._page_title(page, "Service", "Relearns, resets and brake bleeding you can do by hand. Click one to see "
+                                          "the steps.", icon=PAGE_ICON["Service"])
+        self.service_for = tk.Label(page, text="", bg=C["page"], fg=C["muted"], font=F(13), anchor="w")
+        self.service_for.pack(fill="x", pady=(0, 10))
+        self.service_area = ScrollArea(page, C["page"])
+        self.service_area.pack(fill="both", expand=True)
+        self._service_shown = None
+        return page
+
+    def refresh_service(self):
+        make = self._current_make()
+        fam = maker_codes.family(make)
+        if self._service_shown == fam and self.service_area.inner.winfo_children():
+            return
+        self._service_shown = fam
+        ch = self.chosen or {}
+        name = " ".join(str(x) for x in (ch.get("year"), ch.get("make"), ch.get("model")) if x) or make
+        self.service_for.configure(
+            text=f"Showing guides for {name}, plus ones for most vehicles." if fam else
+            "Showing guides for all vehicles. Pick your vehicle on Home to see only the ones for it.")
+        self.service_area.clear()
+        for g in service_guides.for_family(fam):
+            self._service_card(self.service_area.inner, g)
+
+    def _service_card(self, parent, g):
+        card = RoundPanel(parent, pad=(20, 14), radius=16)
+        card.pack(fill="x", pady=(0, 10))
+        box = card.inner
+        top = tk.Frame(box, bg=C["panel"])
+        top.pack(fill="x")
+        title = tk.Label(top, text=g["title"], bg=C["panel"], fg=C["ink"], font=F(15, "bold"), anchor="w")
+        title.pack(side="left")
+        arrow = tk.Label(top, text="Show steps", bg=C["panel"], fg=C["muted"], font=F(12, "bold"))
+        arrow.pack(side="right")
+        sub = tk.Label(box, text=g["applies"] + ".", bg=C["panel"], fg=C["muted"], font=F(12), anchor="w",
+                       justify="left")
+        sub.pack(fill="x", pady=(2, 0))
+        wrap_on_resize(sub, 60)
+        details = tk.Frame(box, bg=C["panel"])
+        state = {"open": False}
+
+        def toggle():
+            state["open"] = not state["open"]
+            arrow.configure(text="Hide steps" if state["open"] else "Show steps")
+            if not state["open"]:
+                details.pack_forget()
+                return
+            for w in details.winfo_children():
+                w.destroy()
+            wrap = max(300, box.winfo_width() - 60)
+            tk.Label(details, text="You'll need: " + g["needs"], bg=C["panel"], fg=C["ink"], font=F(13),
+                     anchor="w", justify="left", wraplength=wrap).pack(fill="x", pady=(0, 6))
+            steps = tk.Frame(details, bg=C["panel"])
+            steps.pack(fill="x")
+            steps.columnconfigure(1, weight=1)
+            for i, step in enumerate(g["steps"], 1):
+                dot = tk.Canvas(steps, width=26, height=26, bg=C["panel"], highlightthickness=0)
+                dot.grid(row=i, column=0, sticky="nw", pady=3)
+                dot.create_oval(2, 2, 24, 24, fill=icons.blend("#FFFFFF", TINT["service"], 0.15), outline="")
+                dot.create_text(13, 13, text=str(i), fill=TINT["service"], font=F(12, "bold"))
+                tk.Label(steps, text=step, bg=C["panel"], fg=C["ink"], font=F(13), anchor="w", justify="left",
+                         wraplength=wrap - 40).grid(row=i, column=1, sticky="w", padx=(10, 0), pady=3)
+            if g.get("note"):
+                tk.Label(details, text=g["note"], bg=C["amber_soft"], fg=C["ink"], font=F(13), anchor="w",
+                         justify="left", wraplength=wrap - 20, padx=12, pady=8).pack(fill="x", pady=(10, 0))
+            details.pack(fill="x", pady=(10, 0))
+
+        card.toggle = toggle
+        bind_click(card, toggle, also=(box, top, title, arrow, sub))
+        for w in (card, box, top, title, arrow, sub):
+            w.configure(cursor="hand2")
 
     # --- Help page --------------------------------------------------------------------------------
     def _build_help(self):

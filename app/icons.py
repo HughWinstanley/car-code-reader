@@ -263,6 +263,19 @@ def _help(cv, cx, cy, s, c, font=None):
     cv.create_text(cx, cy + s * 0.02, text="?", fill=_bg(cv), font=font or ("Helvetica", max(8, int(s * 0.5)), "bold"))
 
 
+def _wrench(cv, cx, cy, s, c):
+    """A wrench, drawn on a slant."""
+    u = s / 10
+    bg = _bg(cv)
+    cv.create_line(cx - 3.2 * u, cy + 3.2 * u, cx + 1.6 * u, cy - 1.6 * u, fill=c, width=max(3, s / 6.5),
+                   capstyle="round")
+    r = 2.4 * u
+    hx, hy = cx + 2.2 * u, cy - 2.2 * u
+    cv.create_oval(hx - r, hy - r, hx + r, hy + r, fill=c, outline="")
+    m = 1.0 * u  # the jaw opening
+    cv.create_polygon(hx, hy, hx + 3 * u, hy - 0.6 * u - m, hx + 0.6 * u + m, hy - 3 * u, fill=bg, outline=bg)
+
+
 def draw(cv, name, cx, cy, size, color, small_font=None, halo=False):
     if halo:  # a soft disc behind the icon
         r = size * 0.72
@@ -287,6 +300,8 @@ def draw(cv, name, cx, cy, size, color, small_font=None, halo=False):
         _home(cv, cx, cy, size, color)
     elif name == "alert":
         _alert(cv, cx, cy, size, color)
+    elif name == "wrench":
+        _wrench(cv, cx, cy, size, color)
     elif name == "help":
         _help(cv, cx, cy, size, color, small_font)
     elif name in ("truck", "suv", "car", "van", "vehicle"):

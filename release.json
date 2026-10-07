@@ -1,17 +1,18 @@
 {
-  "version": "2.16",
-  "notes": "Ford and GM factory code meanings, step-by-step checks, repair videos and safety recalls.",
+  "version": "2.17",
+  "notes": "Factory transmission temperature, and a Service page with relearns, resets and brake bleeding.",
   "files": {
-    "car_code_reader.py": "533101ee581afa98662f9e74f37e349ca99e042575b1ec5617d29b774f750c75",
-    "obd_core.py": "4fcbbea157c8b6ba0d6caf493d138297eba9003cd501c6c205f89994f3205cb5",
+    "car_code_reader.py": "40d0d5f0e6eded3db2712441878cf3e2635353132109247c4b9343dbb5bffbf3",
+    "obd_core.py": "ff6c8cfc94a1145c465927710701f3a96c7c248e1f0d1cdda012d8d3da74b367",
     "dtc_database.py": "c2602d0123c271a96253dcac398ee67c2d0e4ed4366c91b13c7efe14557ec161",
-    "icons.py": "ec99645f92674dd24806c823d75f95829fde72f2b1daaccf78373f34ad11b2d5",
+    "icons.py": "6c8fd010687b698ff3f384ba6dd8320439b58c30de1d660d1cd17da0432be29c",
     "vehicles.py": "05245de636b350bacfb80811e779f2eae7fdf826c4c2cfe4809098c2ced6982e",
     "updater.py": "ed6c8acc6a590f73335d12132b20a388ba334804ed7afd7271b54e287ebc9bc3",
     "j1939.py": "3f9db2423781380ede9f4f40d40037383cf978bc46c265cfb6dbed242801e360",
     "obd1.py": "99da383acb7eb6fa18604500f05ec623214af6c10b0ffc9f00b56f0ea56db70e",
     "maker_codes.py": "8e8f3b215bf685a04f98990439ad5da49247ddf9fc7e0539f14c51bfb279a4e3",
     "recalls.py": "c148593fb39f914bb76b9f0baf7aca6455748c21a8ddeb4c733b800c945b7ae8",
+    "service_guides.py": "fbc11823ad569cf0659c20d06875214fafccc19c268606b497a02d03e875978f",
     "icon.png": "635873108e9b9e6e7bd54b68695ad71151c96e2ff78cad1ed53db48a13a2f71c"
   }
 }

@@ -83,6 +83,15 @@ def format_value(v, unit):
     return f"{v:.1f} {unit}"
 
 
+# Factory (maker-specific) readings, asked for with mode $22. Only ones that are well established are listed.
+# key -> (name, decode(bytes) -> value, unit, plausible range)
+EXTENDED = {
+    "ford": {0x1E1C: ("Transmission fluid temp", lambda d: int.from_bytes(d[:2], "big", signed=True) / 16, "°C",
+                      (-40, 180))},
+    "gm": {0x1940: ("Transmission fluid temp", lambda d: d[0] - 40, "°C", (-40, 180))},
+}
+
+
 def format_pid(pid, data):
     name, fn, unit = PIDS[pid]
     try:
@@ -402,6 +411,9 @@ class DemoTransport:
             return self._frames(E, b"\x44") + self._frames(T, b"\x44")
         if mode == 0x09 and len(req) == 2 and req[1] == 0x02:
             return self._frames(E, b"\x49\x02\x01" + self.VIN.encode())
+        if mode == 0x22 and bytes(req[1:3]) == b"\x1e\x1c":  # Ford transmission fluid temperature
+            t = 82 + 6 * math.sin((time.time() - self._t0) / 20)
+            return self._frames(E, b"\x62\x1e\x1c" + int(t * 16).to_bytes(2, "big", signed=True))
         return ["NO DATA"]
 
     def _pid(self, pid, frozen=False):
@@ -682,6 +694,16 @@ class ELM327:
     def query_pid(self, mode, pid, extra=b""):
         r = self.query_pid_all(mode, pid, extra)
         return r[sorted(r)[0]] if r else None
+
+    def query_did(self, did):
+        """Mode $22 (maker-specific) reading -> data bytes, or None if nothing answered."""
+        res = self.request("22%04X" % did)
+        want = bytes([0x62, did >> 8, did & 0xFF])
+        for ecu in sorted(res):
+            for m in res[ecu]:
+                if m[:3] == want and len(m) > 3:
+                    return m[3:]
+        return None
 
     def supported_pids(self):
         if self._supported is not None:
