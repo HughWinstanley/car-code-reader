@@ -753,6 +753,8 @@ class App:
         self.current_page = name
         if name == "History" and hasattr(self, "history_area"):
             self.refresh_history()
+        if name == "Smog check" and hasattr(self, "smog_area"):
+            self.refresh_smog()
         if name == "Service" and hasattr(self, "service_area"):
             self.refresh_service()
         if name == "Vehicle" and hasattr(self, "recall_btn"):
@@ -2036,9 +2038,11 @@ class App:
                                  ("Connect", self.smog_connect))
             return
         mil_on, count, diesel, rows = decode_readiness(d)
-        year = self.vehicle.get("year", "-")
+        year = str(self.vehicle.get("year", "-"))
         allowed = 2 if year.isdigit() and int(year) <= 2000 else 1
-        not_ready = [r for r in rows if r[1] and r[2]]
+        # Inspections count only the non-continuous monitors (catalyst, EVAP, O2 and so on). The first three
+        # rows — misfire, fuel system, comprehensive — run continuously and don't count toward the limit.
+        not_ready = [r for r in rows[3:] if r[1] and r[2]]
         if mil_on:
             verdict, color, why = ("Not ready: the check-engine light is on", C["red"],
                                    "Vehicles with the check-engine light on fail inspection. Fix the problem first.")
