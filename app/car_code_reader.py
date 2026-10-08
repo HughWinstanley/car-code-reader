@@ -1253,6 +1253,8 @@ class App:
                                 justify="left")
         self.subline.pack(fill="x")
         wrap_on_resize(self.subline, 10)
+        self.scan_time_lbl = tk.Label(text, text="", bg=C["page"], fg=C["muted"], font=F(12), anchor="w")
+        self.scan_time_lbl.pack(fill="x", pady=(4, 0))
         self.actions = tk.Frame(text, bg=C["page"])
         self.actions.pack(fill="x", pady=(14, 0))
         self.scan_btn = PillButton(self.actions, "Scan for problems", self.scan, kind="primary", big=True)
@@ -1303,6 +1305,9 @@ class App:
         what = {"engine": "Engine codes: ", "safety": "ABS and airbag: "}.get(self.scan_kind, "")
         self.scan_btn.set_text({"engine": "Scan engine again", "safety": "Scan ABS and airbag again"}.get(
             self.scan_kind, "Scan for problems"))
+        when = getattr(self, "last_scan_at", None)
+        self.scan_time_lbl.configure(
+            text=f"Last scanned {when:%-I:%M:%S %p}" if self.scanned and when else "")
         if not self.scanned:
             self.lamp.set("busy" if self.busy else "off")
             self.headline.configure(text="Ready to scan")
@@ -1627,6 +1632,7 @@ class App:
                     status, m.get("resp", ""))
         items = sorted(merged.values(), key=lambda i: LEVEL_ORDER[i["level"]])
         self.items, self.modules, self.scanned = items, modules, True
+        self.last_scan_at = datetime.datetime.now()
         if self.scan_kind != "safety":
             self.readiness = ready
             self.mil_on = bool(ready[0] & 0x80) if ready else None
@@ -1673,6 +1679,7 @@ class App:
                              "failure_type": "", "causes": ""}})
         items.sort(key=lambda i: LEVEL_ORDER[i["level"]])
         self.items, self.scanned = items, True
+        self.last_scan_at = datetime.datetime.now()
         self.modules = [{"name": m["name"], "target": m["sa"], "dtcs": m["active"], "bus": "j1939"} for m in mods]
         self.readiness = None
         self.mil_on = any(m["lamps"].get("Check engine (malfunction) lamp") for m in mods)

@@ -1,8 +1,8 @@
 {
-  "version": "2.22",
-  "notes": "Reads 1996-2005 GM trucks and other vehicles that need the protocol forced when auto-detect misses it.",
+  "version": "2.23",
+  "notes": "Scans now show a Last scanned time, so you can tell a re-scan ran.",
   "files": {
-    "car_code_reader.py": "fc5d1651ab39b0c97bb56fa50deaf6d2421a42fd1378af9112bce6faa2a1b5f1",
+    "car_code_reader.py": "0ee0ab0f667d230fcedbc641c09fd2bce071bbf802b03735cc1609a52bb4c22b",
     "obd_core.py": "4ee256565c8dd0cf9ef5b170a5390d2cbea0b1933b575309df17f5be56c2bd66",
     "dtc_database.py": "c2602d0123c271a96253dcac398ee67c2d0e4ed4366c91b13c7efe14557ec161",
     "icons.py": "ee6ab531fcf7008f0c40b5612eb419db8fd9ab755b8d2feceeaa7335f6d48175",
