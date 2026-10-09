@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "1.6 — Oct 9" }
+enum AppInfo { static let version = "1.7 — Oct 9" }
 enum Tab { case home, problems, live, smog, settings }
 
 extension Color {
@@ -97,6 +97,7 @@ struct HomeTab: View {
                 LazyVGrid(columns: cols, spacing: 14) {
                     // Order matches the Mac app's home screen.
                     Button {
+                        reader.scanKind = .engine
                         if reader.connected { reader.scan() } else { reader.connect() }
                         selection = .problems
                     } label: {
@@ -105,6 +106,7 @@ struct HomeTab: View {
                     }.buttonStyle(.plain)
 
                     Button {
+                        reader.scanKind = .safety
                         if reader.connected { reader.scan() } else { reader.connect() }
                         selection = .problems
                     } label: {
@@ -113,6 +115,7 @@ struct HomeTab: View {
                     }.buttonStyle(.plain)
 
                     Button {
+                        reader.scanKind = .all
                         if reader.connected { reader.scan() } else { reader.connect() }
                         selection = .problems
                     } label: {
@@ -257,9 +260,9 @@ struct ProblemsTab: View {
             Group {
             if !reader.connected {
                 NotConnectedView(
-                    subtitle: "Trouble codes from the engine, transmission and other modules, in plain language.",
-                    icon: "icon-engine", tint: MacTint.engine,
-                    message: "Plug the adapter in, turn the key to ON, then connect to scan for codes.")
+                    subtitle: reader.scanKind.subtitle,
+                    icon: reader.scanKind.icon, tint: MacTint.engine,
+                    message: reader.scanKind.message)
             } else {
             VStack {
                 ConnectBar()

@@ -12,8 +12,36 @@ struct Problem: Identifiable {
 
 struct LiveReading: Identifiable { let id = UUID(); let name: String; let value: String }
 
+/// Which home tile started the scan — drives the Problems page's icon & wording.
+enum ScanKind {
+    case engine, safety, all
+
+    var icon: String {
+        switch self {
+        case .engine: return "icon-engine"
+        case .safety: return "icon-absbag"
+        case .all:    return "icon-scan"
+        }
+    }
+    var subtitle: String {
+        switch self {
+        case .engine: return "Check-engine and transmission codes, in plain language."
+        case .safety: return "Brake (ABS) and airbag warning lights, in plain language."
+        case .all:    return "Every module at once — engine, transmission, ABS, airbag and more."
+        }
+    }
+    var message: String {
+        switch self {
+        case .engine: return "Plug the adapter in, turn the key to ON, then connect to scan the engine."
+        case .safety: return "Plug the adapter in, turn the key to ON, then connect to scan ABS and airbag."
+        case .all:    return "Plug the adapter in, turn the key to ON, then connect to run a full scan."
+        }
+    }
+}
+
 @MainActor
 final class Reader: ObservableObject {
+    @Published var scanKind: ScanKind = .all
     @Published var status = "Not connected"
     @Published var connected = false
     @Published var busy = false
