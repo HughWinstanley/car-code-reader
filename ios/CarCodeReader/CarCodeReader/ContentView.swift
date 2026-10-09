@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "2.2 — Oct 9" }
+enum AppInfo { static let version = "2.3 — Oct 9" }
 enum Tab { case home, problems, live, smog, settings }
 
 extension Color {
@@ -304,21 +304,47 @@ struct LiveTab: View {
         NavigationStack {
             Group {
                 if reader.connected {
-                    VStack {
+                    VStack(spacing: 0) {
                         Button(reader.liveRunning ? "Stop" : "Start live data") { reader.toggleLive() }
-                            .buttonStyle(.borderedProminent).padding(.top)
-                        List(reader.live) { r in
-                            HStack { Text(r.name); Spacer(); Text(r.value).fontWeight(.semibold) }
-                        }.listStyle(.plain)
+                            .buttonStyle(.borderedProminent).padding(.vertical, 8)
+                        List {
+                            Section("Vehicle") {
+                                if !reader.chosenName.isEmpty { vrow("Make / model / year", reader.chosenName) }
+                                vrow("VIN", reader.vin)
+                                vrow("Battery", reader.battery)
+                                vrow("Protocol", reader.protocolName)
+                            }
+                            Section("Live readings") {
+                                if reader.live.isEmpty {
+                                    Text("Tap “Start live data” to stream engine readings.")
+                                        .font(.footnote).foregroundStyle(.secondary)
+                                } else {
+                                    ForEach(reader.live) { r in
+                                        HStack { Text(r.name); Spacer(); Text(r.value).fontWeight(.semibold) }
+                                    }
+                                }
+                            }
+                        }
+                        .listStyle(.insetGrouped)
                     }
                 } else {
                     NotConnectedView(
-                        subtitle: "What the engine computer sees right now. Values update about once a second.",
+                        subtitle: "The vehicle's VIN and details, plus live engine readings that update about once a second.",
                         icon: "icon-gauge", tint: MacTint.gauge,
-                        message: "Plug the adapter in, turn the key to ON, then connect to see live readings.")
+                        message: "Plug the adapter in, turn the key to ON, then connect to see the vehicle info and live data.")
                 }
             }
             .navigationTitle("Live data")
+        }
+    }
+
+    /// A label/value row that shows “—” when the value hasn't been read.
+    private func vrow(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label).foregroundStyle(.secondary)
+            Spacer()
+            Text(value.isEmpty ? "—" : value).fontWeight(.semibold)
+                .multilineTextAlignment(.trailing)
         }
     }
 }
