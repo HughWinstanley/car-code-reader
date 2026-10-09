@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "2.4 — Oct 9" }
+enum AppInfo { static let version = "2.5 — Oct 9" }
 enum Tab { case home, problems, live, smog, settings }
 
 extension Color {
@@ -288,19 +288,27 @@ struct ProblemsTab: View {
                 if reader.scanned && reader.problems.isEmpty {
                     Spacer(); Label("No codes found", systemImage: "checkmark.circle").foregroundStyle(.green).font(.title3); Spacer()
                 }
-                List(reader.problems) { p in
-                    NavigationLink {
-                        ProblemDetailView(problem: p)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text(p.code).font(.headline)
-                                Spacer()
-                                Text(p.status).font(.caption).foregroundStyle(color(p.urgency))
+                List {
+                    ForEach(reader.problems) { p in
+                        NavigationLink {
+                            ProblemDetailView(problem: p)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text(p.code).font(.headline)
+                                    Spacer()
+                                    Text(p.status).font(.caption).foregroundStyle(color(p.urgency))
+                                }
+                                Text(p.meaning).font(.subheadline).foregroundStyle(.secondary)
+                                if let f = p.factory { Text("\(f) factory meaning").font(.caption2).foregroundStyle(.secondary) }
                             }
-                            Text(p.meaning).font(.subheadline).foregroundStyle(.secondary)
-                            if let f = p.factory { Text("\(f) factory meaning").font(.caption2).foregroundStyle(.secondary) }
                         }
+                    }
+                    .onDelete { reader.removeProblem(at: $0) }
+
+                    if !reader.problems.isEmpty {
+                        Text("Swipe a code left to remove it from this list. Note: a car can only erase all codes at once (the button below) — one-at-a-time erasing isn't something the OBD port supports.")
+                            .font(.caption2).foregroundStyle(.secondary)
                     }
                 }.listStyle(.plain)
                 if reader.connected && !reader.problems.isEmpty {

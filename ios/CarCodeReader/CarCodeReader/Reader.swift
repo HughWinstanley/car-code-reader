@@ -138,6 +138,12 @@ final class Reader: ObservableObject {
         }
     }
 
+    /// Remove one code from the list (swipe-to-delete). See note in the UI about what this means on a real car.
+    func removeProblem(at offsets: IndexSet) {
+        problems.remove(atOffsets: offsets)
+        status = problems.isEmpty ? "No codes shown." : "\(problems.count) code\(problems.count == 1 ? "" : "s") shown."
+    }
+
     func checkSmog() {
         if isDemo { return }
         guard let e = elm, !busy else { return }
@@ -266,7 +272,7 @@ final class Reader: ObservableObject {
             while !Task.isCancelled {
                 var out: [LiveReading] = []
                 for p in PIDs.list {
-                    if let data = try? await e.pid(p.pid), data.count >= 2 {
+                    if let data = try? await e.pid(p.pid), data.count >= p.len {
                         out.append(LiveReading(name: p.name, value: p.format(p.decode(data))))
                     }
                 }
