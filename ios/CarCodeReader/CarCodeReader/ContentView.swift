@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "2.3 — Oct 9" }
+enum AppInfo { static let version = "2.4 — Oct 9" }
 enum Tab { case home, problems, live, smog, settings }
 
 extension Color {
@@ -89,10 +89,29 @@ struct HomeTab: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                Text(reader.connected ? reader.status : "Not connected · open Problems or tap Scan to connect")
-                    .font(.footnote).foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity).padding(.horizontal).padding(.top, 4)
+                if reader.isDemo {
+                    VStack(spacing: 6) {
+                        Text("Demo mode — sample data (not a real car)")
+                            .font(.footnote).fontWeight(.semibold).foregroundStyle(.orange)
+                        Text("Close and reopen the app to clear it.")
+                            .font(.caption2).foregroundStyle(.secondary)
+                        Button("Exit demo") { reader.exitDemo() }
+                            .font(.caption).buttonStyle(.bordered).tint(.orange)
+                    }
+                    .multilineTextAlignment(.center).frame(maxWidth: .infinity)
+                    .padding(.horizontal).padding(.top, 4)
+                } else {
+                    VStack(spacing: 6) {
+                        Text(reader.connected ? reader.status : "Not connected · open Problems or tap Scan to connect")
+                            .font(.footnote).foregroundStyle(.secondary)
+                        if !reader.connected {
+                            Button("See a demo (sample data)") { reader.loadDemo(); selection = .problems }
+                                .font(.footnote).buttonStyle(.bordered)
+                        }
+                    }
+                    .multilineTextAlignment(.center).frame(maxWidth: .infinity)
+                    .padding(.horizontal).padding(.top, 4)
+                }
 
                 LazyVGrid(columns: cols, spacing: 14) {
                     // Order matches the Mac app's home screen.
@@ -436,6 +455,18 @@ struct SettingsTab: View {
                     Text("Wi-Fi adapters make their own Wi-Fi network — join it in the iPhone's Settings first. The OBDLink MX+ (classic Bluetooth) isn't supported here; use a Wi-Fi or BLE adapter.")
                 }
 
+
+                Section {
+                    if reader.isDemo {
+                        Button("Exit demo", role: .destructive) { reader.exitDemo() }
+                    } else {
+                        Button("Load demo data") { reader.loadDemo() }
+                    }
+                } header: {
+                    Text("Demo")
+                } footer: {
+                    Text("Fills the app with sample data so you can look around without a car. It's never saved — closing and reopening the app clears it.")
+                }
 
                 Section("About") {
                     HStack { Text("App version").foregroundStyle(.secondary); Spacer(); Text(AppInfo.version).fontWeight(.semibold) }

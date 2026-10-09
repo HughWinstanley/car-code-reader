@@ -41,6 +41,7 @@ enum ScanKind {
 
 @MainActor
 final class Reader: ObservableObject {
+    @Published var isDemo = false          // sample data; never saved — gone when the app restarts
     @Published var scanKind: ScanKind = .all
     @Published var status = "Not connected"
     @Published var connected = false
@@ -105,6 +106,7 @@ final class Reader: ObservableObject {
     }
 
     func scan() {
+        if isDemo { status = "Demo scan complete — \(problems.count) sample codes."; return }
         guard let e = elm, !busy else { return }
         busy = true; status = "Scanning…"
         Task { await scanInternal(e); busy = false }
@@ -126,6 +128,7 @@ final class Reader: ObservableObject {
     }
 
     func clearCodes() {
+        if isDemo { problems = []; scanned = true; status = "Codes cleared (demo)."; return }
         guard let e = elm, !busy else { return }
         busy = true; status = "Clearing codes…"
         Task {
@@ -136,6 +139,7 @@ final class Reader: ObservableObject {
     }
 
     func checkSmog() {
+        if isDemo { return }
         guard let e = elm, !busy else { return }
         busy = true
         Task {
@@ -162,7 +166,76 @@ final class Reader: ObservableObject {
         chosenName = "\(year) \(makeName) \(model)"
     }
 
+    // MARK: - Demo mode (sample data only — nothing is saved, cleared on restart)
+
+    func loadDemo() {
+        isDemo = true
+        connected = true
+        busy = false
+        scanned = true
+        make = .other
+        protocolName = "ISO 15765-4 (CAN 11/500)"
+        vin = "1HGCR2F5XFA027358"
+        battery = "14.1 V"
+        chosenName = "2015 Honda Accord EX"
+        year = 2015
+
+        let samples: [(String, String)] = [
+            ("P0301", "pending"), ("P0171", "stored"), ("P0420", "stored"), ("P0455", "history"),
+        ]
+        problems = samples.map { code, status in
+            let (text, factory) = DTC.describe(code, make: make)
+            return Problem(code: code, meaning: text, status: status,
+                           urgency: CodeDetail.severity(code, status: status, module: "Engine"),
+                           factory: factory)
+        }
+
+        live = [
+            LiveReading(name: "Engine RPM", value: "842 rpm"),
+            LiveReading(name: "Vehicle speed", value: "0 mph"),
+            LiveReading(name: "Coolant temperature", value: "197 °F"),
+            LiveReading(name: "Intake air temperature", value: "88 °F"),
+            LiveReading(name: "Calculated engine load", value: "18 %"),
+            LiveReading(name: "Throttle position", value: "14 %"),
+            LiveReading(name: "Short-term fuel trim", value: "+6 %"),
+            LiveReading(name: "Mass airflow (MAF)", value: "3.1 g/s"),
+        ]
+        liveRunning = false
+
+        monitors = [
+            Monitor(name: "Misfire", supported: true, incomplete: false, continuous: true),
+            Monitor(name: "Fuel system", supported: true, incomplete: false, continuous: true),
+            Monitor(name: "Comprehensive components", supported: true, incomplete: false, continuous: true),
+            Monitor(name: "Catalyst", supported: true, incomplete: false, continuous: false),
+            Monitor(name: "Evaporative system (EVAP)", supported: true, incomplete: true, continuous: false),
+            Monitor(name: "Oxygen sensor", supported: true, incomplete: false, continuous: false),
+            Monitor(name: "Oxygen sensor heater", supported: true, incomplete: false, continuous: false),
+            Monitor(name: "EGR system", supported: true, incomplete: false, continuous: false),
+            Monitor(name: "Secondary air system", supported: false, incomplete: false, continuous: false),
+        ]
+        smogText = "Not ready yet: 1 self-test still running"
+        smogOK = false
+        smogDetail = "Most inspections allow 1 unfinished test. Drive normally for a few days, then check again."
+
+        semiFaults = J1939.example
+        semiStatus = "Demo: 1 active fault shown."
+
+        status = "Demo data — this isn't a real car."
+    }
+
+    func exitDemo() {
+        isDemo = false
+        stopLive()
+        connected = false; busy = false; scanned = false
+        problems = []; live = []; liveRunning = false
+        monitors = []; smogText = ""; smogOK = false; smogDetail = ""
+        semiFaults = []; semiStatus = ""
+        vin = ""; battery = ""; protocolName = ""; chosenName = ""; year = nil
+        status = "Not connected"
+    }
+
     func readSemi() {
+        if isDemo { semiFaults = J1939.example; semiStatus = "Demo: 1 active fault shown."; return }
         guard let link = link else { semiStatus = "Connect on the Problems tab first."; return }
         guard !busy else { return }
         busy = true; semiStatus = "Listening to the truck's J1939 network…"; semiFaults = []
@@ -185,6 +258,7 @@ final class Reader: ObservableObject {
     }
 
     func toggleLive() {
+        if isDemo { liveRunning.toggle(); return }
         if liveRunning { stopLive(); return }
         guard let e = elm else { return }
         liveRunning = true
