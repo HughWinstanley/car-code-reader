@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "0.9 — Oct 9" }
+enum AppInfo { static let version = "1.0 — Oct 9" }
 enum Tab { case home, problems, live, smog, settings }
 
 struct ContentView: View {
@@ -92,13 +92,6 @@ struct HomeTab: View {
                     Button { selection = .smog } label: {
                         TileLabel(title: "Smog check", subtitle: "Ready for inspection?",
                                   icon: .asset("icon-smog"), tint: .green)
-                    }.buttonStyle(.plain)
-
-                    NavigationLink {
-                        VehicleView()
-                    } label: {
-                        TileLabel(title: "Vehicle", subtitle: "VIN, battery, protocol",
-                                  icon: .asset("icon-vehicle"), tint: .blue)
                     }.buttonStyle(.plain)
 
                     NavigationLink {
