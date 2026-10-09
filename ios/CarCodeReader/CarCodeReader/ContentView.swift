@@ -1,21 +1,106 @@
 import SwiftUI
 
-enum AppInfo { static let version = "0.3 — Oct 9" }
+enum AppInfo { static let version = "0.4 — Oct 9" }
+enum Tab { case home, problems, live, smog, settings }
 
 struct ContentView: View {
     @EnvironmentObject var reader: Reader
+    @State private var selection: Tab = .home
     var body: some View {
-        TabView {
-            ProblemsTab().tabItem { Label("Problems", systemImage: "exclamationmark.triangle") }
-            LiveTab().tabItem { Label("Live data", systemImage: "gauge") }
-            SmogTab().tabItem { Label("Smog", systemImage: "checkmark.seal") }
-            VehicleTab().tabItem { Label("Vehicle", systemImage: "car") }
-            SettingsTab().tabItem { Label("Settings", systemImage: "gearshape") }
+        TabView(selection: $selection) {
+            HomeTab(selection: $selection).tabItem { Label("Home", systemImage: "house") }.tag(Tab.home)
+            ProblemsTab().tabItem { Label("Problems", systemImage: "exclamationmark.triangle") }.tag(Tab.problems)
+            LiveTab().tabItem { Label("Live", systemImage: "gauge") }.tag(Tab.live)
+            SmogTab().tabItem { Label("Smog", systemImage: "checkmark.seal") }.tag(Tab.smog)
+            SettingsTab().tabItem { Label("Settings", systemImage: "gearshape") }.tag(Tab.settings)
         }
     }
 }
 
-// Shared connect / status header
+// MARK: - Home
+
+/// The coloured icon-and-text card used on the Home grid.
+struct TileLabel: View {
+    let title: String
+    let subtitle: String
+    let system: String
+    let tint: Color
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ZStack {
+                Circle().fill(tint.opacity(0.15)).frame(width: 52, height: 52)
+                Image(systemName: system).font(.system(size: 23, weight: .semibold)).foregroundStyle(tint)
+            }
+            Text(title).font(.headline).foregroundStyle(.primary)
+            Text(subtitle).font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 128, alignment: .leading)
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 18).fill(Color(.secondarySystemGroupedBackground)))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color(.separator), lineWidth: 0.5))
+    }
+}
+
+struct HomeTab: View {
+    @EnvironmentObject var reader: Reader
+    @Binding var selection: Tab
+    private let cols = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                Text(reader.connected ? reader.status : "Not connected · open Problems or tap Scan to connect")
+                    .font(.footnote).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity).padding(.horizontal).padding(.top, 4)
+
+                LazyVGrid(columns: cols, spacing: 14) {
+                    Button {
+                        if reader.connected { reader.scan() } else { reader.connect() }
+                        selection = .problems
+                    } label: {
+                        TileLabel(title: "Scan for codes", subtitle: "Engine & transmission",
+                                  system: "magnifyingglass", tint: .orange)
+                    }.buttonStyle(.plain)
+
+                    Button { selection = .live } label: {
+                        TileLabel(title: "Live data", subtitle: "RPM, speed, temps",
+                                  system: "gauge", tint: .teal)
+                    }.buttonStyle(.plain)
+
+                    Button { selection = .smog } label: {
+                        TileLabel(title: "Smog check", subtitle: "Ready for inspection?",
+                                  system: "checkmark.seal", tint: .green)
+                    }.buttonStyle(.plain)
+
+                    NavigationLink {
+                        VehicleView()
+                    } label: {
+                        TileLabel(title: "Vehicle", subtitle: "VIN, battery, protocol",
+                                  system: "car", tint: .blue)
+                    }.buttonStyle(.plain)
+
+                    Button {
+                        if reader.connected { reader.clearCodes(); selection = .problems }
+                    } label: {
+                        TileLabel(title: "Clear codes", subtitle: "Turn off the light",
+                                  system: "bolt.slash", tint: .red)
+                    }.buttonStyle(.plain).disabled(!reader.connected)
+
+                    Button { selection = .settings } label: {
+                        TileLabel(title: "Settings", subtitle: "Adapter & make",
+                                  system: "gearshape", tint: .gray)
+                    }.buttonStyle(.plain)
+                }
+                .padding(.horizontal, 14).padding(.top, 8)
+            }
+            .navigationTitle("Car Code Reader")
+        }
+    }
+}
+
+// MARK: - Shared connect bar
+
 struct ConnectBar: View {
     @EnvironmentObject var reader: Reader
     var body: some View {
@@ -39,6 +124,8 @@ struct ConnectBar: View {
         .padding(.horizontal)
     }
 }
+
+// MARK: - Problems
 
 struct ProblemsTab: View {
     @EnvironmentObject var reader: Reader
@@ -73,6 +160,8 @@ struct ProblemsTab: View {
     }
 }
 
+// MARK: - Live data
+
 struct LiveTab: View {
     @EnvironmentObject var reader: Reader
     var body: some View {
@@ -92,6 +181,8 @@ struct LiveTab: View {
         }
     }
 }
+
+// MARK: - Smog
 
 struct SmogTab: View {
     @EnvironmentObject var reader: Reader
@@ -124,24 +215,26 @@ struct SmogTab: View {
     }
 }
 
-struct VehicleTab: View {
+// MARK: - Vehicle (opened from Home)
+
+struct VehicleView: View {
     @EnvironmentObject var reader: Reader
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Vehicle") {
-                    row("VIN", reader.vin)
-                    row("Battery", reader.battery)
-                    row("Protocol", reader.protocolName)
-                }
+        Form {
+            Section("Vehicle") {
+                row("VIN", reader.vin)
+                row("Battery", reader.battery)
+                row("Protocol", reader.protocolName)
             }
-            .navigationTitle("Vehicle")
         }
+        .navigationTitle("Vehicle")
     }
     func row(_ k: String, _ v: String) -> some View {
         HStack { Text(k).foregroundStyle(.secondary); Spacer(); Text(v.isEmpty ? "—" : v).fontWeight(.semibold) }
     }
 }
+
+// MARK: - Settings
 
 struct SettingsTab: View {
     @EnvironmentObject var reader: Reader
