@@ -1,0 +1,183 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+/* Begin PBXBuildFile section */
+		DEB51071904A8DC713F4517F /* CarCodeReaderApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B389D3FA4FF8BE7D04E9BA86 /* CarCodeReaderApp.swift */; };
+		70EE588C003629B12094698A /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39AAA60214B0F4739A7AFFF2 /* ContentView.swift */; };
+		FB147E7C28E1D728161C44DB /* OBDLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF520B3632CAC4A64D74FF9E /* OBDLink.swift */; };
+		3915187191D224297F783863 /* WifiLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19057ACA9E79FF9AB3DCEFCA /* WifiLink.swift */; };
+		B6A2233D6B55279F8C33474B /* BLELink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 638CF2ECF996025D897A67B0 /* BLELink.swift */; };
+		1D89C21F19776B5BE214233F /* ELM327.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96AA83782CB713F9F6238817 /* ELM327.swift */; };
+		73E7EC5B7FA13D80CCD3D8E1 /* DTC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7219BE45C9155CB6EDF4C629 /* DTC.swift */; };
+		186BAB44A5B61ECD89E6240F /* CodeData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F9F6D96E02EE8A4203F88E5 /* CodeData.swift */; };
+		249C366AFE73EC2D7AD4D21B /* PIDs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25F853910FB81174177BABE1 /* PIDs.swift */; };
+		25A352301275A84932B009B8 /* Readiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AFE5B52EE8432CF7FAA0D2A /* Readiness.swift */; };
+		82B137F24805E3A29162F556 /* Reader.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEBC534CB1E74E979CB06E67 /* Reader.swift */; };
+		1228440DDBCFF603473E79E6 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 255D1FE58E2386F38D9AE609 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+/* Begin PBXFileReference section */
+		B389D3FA4FF8BE7D04E9BA86 /* CarCodeReaderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CarCodeReaderApp.swift"; sourceTree = "<group>"; };
+		39AAA60214B0F4739A7AFFF2 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ContentView.swift"; sourceTree = "<group>"; };
+		CF520B3632CAC4A64D74FF9E /* OBDLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OBDLink.swift"; sourceTree = "<group>"; };
+		19057ACA9E79FF9AB3DCEFCA /* WifiLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WifiLink.swift"; sourceTree = "<group>"; };
+		638CF2ECF996025D897A67B0 /* BLELink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BLELink.swift"; sourceTree = "<group>"; };
+		96AA83782CB713F9F6238817 /* ELM327.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ELM327.swift"; sourceTree = "<group>"; };
+		7219BE45C9155CB6EDF4C629 /* DTC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DTC.swift"; sourceTree = "<group>"; };
+		4F9F6D96E02EE8A4203F88E5 /* CodeData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CodeData.swift"; sourceTree = "<group>"; };
+		25F853910FB81174177BABE1 /* PIDs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PIDs.swift"; sourceTree = "<group>"; };
+		4AFE5B52EE8432CF7FAA0D2A /* Readiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Readiness.swift"; sourceTree = "<group>"; };
+		CEBC534CB1E74E979CB06E67 /* Reader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Reader.swift"; sourceTree = "<group>"; };
+		255D1FE58E2386F38D9AE609 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		38A007151ABE87CC01A5B6E9 /* CarCodeReader.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CarCodeReader.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+/* Begin PBXFrameworksBuildPhase section */
+		D1897DBBE7DC4EBFD5751F23 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+/* Begin PBXGroup section */
+		81B6A57DEDA76992CF92A034 = {isa = PBXGroup; children = (
+			6850F8BFB511F154BC01A524 /* CarCodeReader */,
+			550258979F7021997C570D6F /* Products */,
+		); sourceTree = "<group>"; };
+		6850F8BFB511F154BC01A524 /* CarCodeReader */ = {isa = PBXGroup; children = (
+			B389D3FA4FF8BE7D04E9BA86 /* CarCodeReaderApp.swift */,
+			39AAA60214B0F4739A7AFFF2 /* ContentView.swift */,
+			CF520B3632CAC4A64D74FF9E /* OBDLink.swift */,
+			19057ACA9E79FF9AB3DCEFCA /* WifiLink.swift */,
+			638CF2ECF996025D897A67B0 /* BLELink.swift */,
+			96AA83782CB713F9F6238817 /* ELM327.swift */,
+			7219BE45C9155CB6EDF4C629 /* DTC.swift */,
+			4F9F6D96E02EE8A4203F88E5 /* CodeData.swift */,
+			25F853910FB81174177BABE1 /* PIDs.swift */,
+			4AFE5B52EE8432CF7FAA0D2A /* Readiness.swift */,
+			CEBC534CB1E74E979CB06E67 /* Reader.swift */,
+			255D1FE58E2386F38D9AE609 /* Assets.xcassets */,
+		); path = CarCodeReader; sourceTree = "<group>"; };
+		550258979F7021997C570D6F /* Products */ = {isa = PBXGroup; children = (
+			38A007151ABE87CC01A5B6E9 /* CarCodeReader.app */,
+		); name = Products; sourceTree = "<group>"; };
+/* End PBXGroup section */
+/* Begin PBXNativeTarget section */
+		0E8A3AD980EC179856012B7E /* CarCodeReader */ = {isa = PBXNativeTarget; buildConfigurationList = D2DC2DEB22F28ED24B0AEA62 /* Build configuration list for PBXNativeTarget "CarCodeReader" */; buildPhases = (
+			60C4A7BCE9558CB20D9ADDCB /* Sources */,
+			D1897DBBE7DC4EBFD5751F23 /* Frameworks */,
+			6AC696A880E335123309EDD3 /* Resources */,
+		); buildRules = (); dependencies = (); name = CarCodeReader; productName = CarCodeReader; productReference = 38A007151ABE87CC01A5B6E9 /* CarCodeReader.app */; productType = "com.apple.product-type.application"; };
+/* End PBXNativeTarget section */
+/* Begin PBXProject section */
+		98F54143AB4E86B28C3AFEE0 /* Project object */ = {isa = PBXProject; attributes = { LastSwiftUpdateCheck = 1500; LastUpgradeCheck = 1500; TargetAttributes = { 0E8A3AD980EC179856012B7E = { CreatedOnToolsVersion = 15.0; }; }; }; buildConfigurationList = 61E44E14228E7449E75C66FE /* Build configuration list for PBXProject "CarCodeReader" */; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = ( en, Base, ); mainGroup = 81B6A57DEDA76992CF92A034; productRefGroup = 550258979F7021997C570D6F /* Products */; projectDirPath = ""; projectRoot = ""; targets = ( 0E8A3AD980EC179856012B7E /* CarCodeReader */, ); };
+/* End PBXProject section */
+/* Begin PBXResourcesBuildPhase section */
+		6AC696A880E335123309EDD3 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ( 1228440DDBCFF603473E79E6 /* Assets.xcassets in Resources */, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+/* Begin PBXSourcesBuildPhase section */
+		60C4A7BCE9558CB20D9ADDCB /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (
+			DEB51071904A8DC713F4517F /* CarCodeReaderApp.swift in Sources */,
+			70EE588C003629B12094698A /* ContentView.swift in Sources */,
+			FB147E7C28E1D728161C44DB /* OBDLink.swift in Sources */,
+			3915187191D224297F783863 /* WifiLink.swift in Sources */,
+			B6A2233D6B55279F8C33474B /* BLELink.swift in Sources */,
+			1D89C21F19776B5BE214233F /* ELM327.swift in Sources */,
+			73E7EC5B7FA13D80CCD3D8E1 /* DTC.swift in Sources */,
+			186BAB44A5B61ECD89E6240F /* CodeData.swift in Sources */,
+			249C366AFE73EC2D7AD4D21B /* PIDs.swift in Sources */,
+			25A352301275A84932B009B8 /* Readiness.swift in Sources */,
+			82B137F24805E3A29162F556 /* Reader.swift in Sources */,
+		); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+/* Begin XCBuildConfiguration section */
+		8952A84346F4E2F72E372166 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
+			ALWAYS_SEARCH_USER_PATHS = NO;
+			CLANG_ANALYZER_NONNULL = YES;
+			CLANG_ENABLE_MODULES = YES;
+			CLANG_ENABLE_OBJC_ARC = YES;
+			COPY_PHASE_STRIP = NO;
+			DEBUG_INFORMATION_FORMAT = dwarf;
+			ENABLE_STRICT_OBJC_MSGSEND = YES;
+			ENABLE_TESTABILITY = YES;
+			GCC_C_LANGUAGE_STANDARD = gnu11;
+			GCC_DYNAMIC_NO_PIC = NO;
+			GCC_NO_COMMON_BLOCKS = YES;
+			GCC_OPTIMIZATION_LEVEL = 0;
+			GCC_PREPROCESSOR_DEFINITIONS = "DEBUG=1";
+			IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+			MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+			MTL_FAST_MATH = YES;
+			ONLY_ACTIVE_ARCH = YES;
+			SDKROOT = iphoneos;
+			SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+			SWIFT_OPTIMIZATION_LEVEL = -Onone;
+			SWIFT_VERSION = 5.0;
+		}; name = Debug; };
+		677525DDA344EAFD7DC51F6F /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
+			ALWAYS_SEARCH_USER_PATHS = NO;
+			CLANG_ANALYZER_NONNULL = YES;
+			CLANG_ENABLE_MODULES = YES;
+			CLANG_ENABLE_OBJC_ARC = YES;
+			COPY_PHASE_STRIP = NO;
+			DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+			ENABLE_NS_ASSERTIONS = NO;
+			ENABLE_STRICT_OBJC_MSGSEND = YES;
+			GCC_C_LANGUAGE_STANDARD = gnu11;
+			GCC_NO_COMMON_BLOCKS = YES;
+			IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+			MTL_ENABLE_DEBUG_INFO = NO;
+			MTL_FAST_MATH = YES;
+			SDKROOT = iphoneos;
+			SWIFT_COMPILATION_MODE = wholemodule;
+			SWIFT_OPTIMIZATION_LEVEL = "-O";
+			SWIFT_VERSION = 5.0;
+			VALIDATE_PRODUCT = YES;
+		}; name = Release; };
+		B584A1685393A90648DC939C /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {
+			ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+			ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+			CODE_SIGN_STYLE = Automatic;
+			CURRENT_PROJECT_VERSION = 1;
+			ENABLE_PREVIEWS = YES;
+			GENERATE_INFOPLIST_FILE = YES;
+			INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Car Code Reader connects to your Bluetooth OBD-II adapter.";
+			INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Car Code Reader connects to your Wi-Fi OBD-II adapter.";
+			INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+			INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+			INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+			INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+			LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+			MARKETING_VERSION = 1.0;
+			PRODUCT_BUNDLE_IDENTIFIER = com.carcodereader.CarCodeReader;
+			PRODUCT_NAME = "$(TARGET_NAME)";
+			SWIFT_EMIT_LOC_STRINGS = YES;
+			SWIFT_VERSION = 5.0;
+			TARGETED_DEVICE_FAMILY = "1,2";
+		}; name = Debug; };
+		0E24D98014C2DF6FE2BCBFAD /* Release */ = {isa = XCBuildConfiguration; buildSettings = {
+			ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+			ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+			CODE_SIGN_STYLE = Automatic;
+			CURRENT_PROJECT_VERSION = 1;
+			ENABLE_PREVIEWS = YES;
+			GENERATE_INFOPLIST_FILE = YES;
+			INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Car Code Reader connects to your Bluetooth OBD-II adapter.";
+			INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Car Code Reader connects to your Wi-Fi OBD-II adapter.";
+			INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+			INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+			INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+			INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+			LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
+			MARKETING_VERSION = 1.0;
+			PRODUCT_BUNDLE_IDENTIFIER = com.carcodereader.CarCodeReader;
+			PRODUCT_NAME = "$(TARGET_NAME)";
+			SWIFT_EMIT_LOC_STRINGS = YES;
+			SWIFT_VERSION = 5.0;
+			TARGETED_DEVICE_FAMILY = "1,2";
+		}; name = Release; };
+/* End XCBuildConfiguration section */
+/* Begin XCConfigurationList section */
+		61E44E14228E7449E75C66FE /* Build configuration list for PBXProject "CarCodeReader" */ = {isa = XCConfigurationList; buildConfigurations = ( 8952A84346F4E2F72E372166 /* Debug */, 677525DDA344EAFD7DC51F6F /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		D2DC2DEB22F28ED24B0AEA62 /* Build configuration list for PBXNativeTarget "CarCodeReader" */ = {isa = XCConfigurationList; buildConfigurations = ( B584A1685393A90648DC939C /* Debug */, 0E24D98014C2DF6FE2BCBFAD /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+	};
+	rootObject = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+}

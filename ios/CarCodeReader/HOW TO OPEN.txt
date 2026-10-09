@@ -1,0 +1,23 @@
+HOW TO OPEN AND RUN
+===================
+1. Double-click  CarCodeReader.xcodeproj  (the blue icon). Xcode opens the
+   real project — no setup needed; the code and permissions are already in it.
+
+2. Plug your iPhone into the Mac with its cable. Unlock the phone; tap Trust if asked.
+
+3. At the top of Xcode, click the device menu (next to the ▶ button) and pick
+   YOUR iPHONE from the list.
+
+4. The first time only, set who signs the app:
+   - Click the blue "CarCodeReader" at the top of the left sidebar.
+   - Click the "CarCodeReader" TARGET, then "Signing & Capabilities".
+   - Next to "Team", choose "Add an Account…" and sign in with your Apple ID
+     (free is fine). Then pick your name in the Team menu.
+
+5. Press the ▶ (Run) button, top-left.
+   First time: on the iPHONE go to Settings > General > VPN & Device Management,
+   tap your Apple ID, tap Trust. Then press ▶ again.
+
+The app opens on your phone. To read a truck you need a Wi-Fi or BLE OBD adapter
+(NOT the OBDLink MX+ — see the README note). Expect a build error or two the
+first time; send me whatever Xcode shows and I'll fix it.
