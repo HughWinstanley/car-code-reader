@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "1.3 — Oct 9" }
+enum AppInfo { static let version = "1.4 — Oct 9" }
 enum Tab { case home, problems, live, smog, settings }
 
 extension Color {
@@ -137,12 +137,6 @@ struct HomeTab: View {
                                   icon: .asset("icon-cars"), tint: MacTint.vehicle)
                     }.buttonStyle(.plain)
 
-                    Button {
-                        if reader.connected { reader.clearCodes(); selection = .problems }
-                    } label: {
-                        TileLabel(title: "Clear codes", subtitle: "Turn off the light",
-                                  icon: .asset("icon-engine"), tint: MacTint.engine)
-                    }.buttonStyle(.plain).disabled(!reader.connected)
                 }
                 .padding(.horizontal, 14).padding(.top, 8)
             }
