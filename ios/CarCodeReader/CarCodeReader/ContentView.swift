@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "1.0 — Oct 9" }
+enum AppInfo { static let version = "1.1 — Oct 9" }
 enum Tab { case home, problems, live, smog, settings }
 
 struct ContentView: View {
@@ -154,6 +154,72 @@ struct ConnectBar: View {
     }
 }
 
+// MARK: - Mac-style empty state (shown when nothing is connected)
+
+struct EmptyStateCard: View {
+    @EnvironmentObject var reader: Reader
+    let icon: String
+    let tint: Color
+    let title: String
+    let message: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center, spacing: 16) {
+                ZStack {
+                    Circle().fill(tint.opacity(0.15)).frame(width: 64, height: 64)
+                    Image(icon).renderingMode(.template).resizable().scaledToFit()
+                        .frame(width: 36, height: 36).foregroundStyle(tint)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title).font(.headline)
+                    Text(message).font(.subheadline).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if reader.busy {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text(reader.status).font(.footnote).foregroundStyle(.secondary)
+                }
+            } else {
+                Button { reader.connect() } label: {
+                    Text("Connect").font(.headline).foregroundStyle(.white)
+                        .padding(.horizontal, 28).padding(.vertical, 12)
+                        .background(Capsule().fill(Color.primary))
+                }
+                if reader.status != "Not connected" {
+                    Text(reader.status).font(.footnote).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .background(RoundedRectangle(cornerRadius: 18).fill(Color(.secondarySystemGroupedBackground)))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Color(.separator), lineWidth: 0.5))
+        .padding(.horizontal)
+    }
+}
+
+/// The subtitle + empty-state card laid out like the Mac app's pages.
+struct NotConnectedView: View {
+    let subtitle: String
+    let icon: String
+    let tint: Color
+    let message: String
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true).padding(.horizontal)
+                EmptyStateCard(icon: icon, tint: tint, title: "Not connected yet", message: message)
+            }
+            .padding(.top, 8)
+        }
+    }
+}
+
 // MARK: - Problems
 
 struct ProblemsTab: View {
@@ -163,6 +229,13 @@ struct ProblemsTab: View {
     }
     var body: some View {
         NavigationStack {
+            Group {
+            if !reader.connected {
+                NotConnectedView(
+                    subtitle: "Trouble codes from the engine, transmission and other modules, in plain language.",
+                    icon: "icon-engine", tint: .orange,
+                    message: "Plug the adapter in, turn the key to ON, then connect to scan for codes.")
+            } else {
             VStack {
                 ConnectBar()
                 if reader.scanned && reader.problems.isEmpty {
@@ -188,6 +261,8 @@ struct ProblemsTab: View {
                         .buttonStyle(.bordered).tint(.red).padding(.bottom, 6).disabled(reader.busy)
                 }
             }
+            }
+            }
             .navigationTitle("Problems")
         }
     }
@@ -199,16 +274,21 @@ struct LiveTab: View {
     @EnvironmentObject var reader: Reader
     var body: some View {
         NavigationStack {
-            VStack {
+            Group {
                 if reader.connected {
-                    Button(reader.liveRunning ? "Stop" : "Start live data") { reader.toggleLive() }
-                        .buttonStyle(.borderedProminent).padding(.top)
+                    VStack {
+                        Button(reader.liveRunning ? "Stop" : "Start live data") { reader.toggleLive() }
+                            .buttonStyle(.borderedProminent).padding(.top)
+                        List(reader.live) { r in
+                            HStack { Text(r.name); Spacer(); Text(r.value).fontWeight(.semibold) }
+                        }.listStyle(.plain)
+                    }
                 } else {
-                    Text("Connect on the Problems tab first.").foregroundStyle(.secondary).padding()
+                    NotConnectedView(
+                        subtitle: "What the engine computer sees right now. Values update about once a second.",
+                        icon: "icon-gauge", tint: .teal,
+                        message: "Plug the adapter in, turn the key to ON, then connect to see live readings.")
                 }
-                List(reader.live) { r in
-                    HStack { Text(r.name); Spacer(); Text(r.value).fontWeight(.semibold) }
-                }.listStyle(.plain)
             }
             .navigationTitle("Live data")
         }
@@ -222,8 +302,13 @@ struct SmogTab: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading) {
-                if reader.monitors.isEmpty {
-                    Text("Connect and scan to see whether the vehicle is ready for inspection.")
+                if !reader.connected {
+                    NotConnectedView(
+                        subtitle: "Whether the vehicle's self-tests are done, so it can pass an emissions inspection.",
+                        icon: "icon-smog", tint: .green,
+                        message: "Connect and scan to see whether the vehicle is ready for inspection.")
+                } else if reader.monitors.isEmpty {
+                    Text("Tap Check again to read the self-tests.")
                         .foregroundStyle(.secondary).padding()
                 } else {
                     Text(reader.smogText).font(.title3).fontWeight(.bold)
