@@ -14,13 +14,13 @@ final class WifiLink: OBDLink {
         let c = NWConnection(host: NWEndpoint.Host(host),
                              port: NWEndpoint.Port(rawValue: port) ?? 35000, using: .tcp)
         conn = c
-        var resumed = false
+        let gate = ResumeGate()
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
             c.stateUpdateHandler = { state in
                 switch state {
-                case .ready:           if !resumed { resumed = true; cont.resume() }
-                case .failed(let e):   if !resumed { resumed = true; cont.resume(throwing: e) }
-                case .cancelled:       if !resumed { resumed = true; cont.resume(throwing: OBDError.cancelled) }
+                case .ready:           gate.fire { cont.resume() }
+                case .failed(let e):   gate.fire { cont.resume(throwing: e) }
+                case .cancelled:       gate.fire { cont.resume(throwing: OBDError.cancelled) }
                 default: break
                 }
             }
@@ -47,5 +47,18 @@ final class WifiLink: OBDLink {
             if let s = String(data: chunk, encoding: .ascii) { reply += s; if reply.contains(">") { break } }
         }
         return reply.replacingOccurrences(of: ">", with: "")
+    }
+}
+
+/// Fires its block at most once, in a thread-safe way (the connection's state handler can fire
+/// several times). Lets the one-time "connected / failed" result resume the continuation cleanly.
+final class ResumeGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var done = false
+    func fire(_ block: () -> Void) {
+        lock.lock(); defer { lock.unlock() }
+        if done { return }
+        done = true
+        block()
     }
 }
