@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "1.4 — Oct 9" }
+enum AppInfo { static let version = "1.5 — Oct 9" }
 enum Tab { case home, problems, live, smog, settings }
 
 extension Color {
@@ -57,16 +57,19 @@ struct TileLabel: View {
     let tint: Color
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ZStack {
-                Circle().fill(tint.opacity(0.15)).frame(width: 52, height: 52)
+            Group {
                 switch icon {
                 case .asset(let name):
-                    Image(name).renderingMode(.template).resizable().scaledToFit()
-                        .frame(width: 30, height: 30).foregroundStyle(tint)
+                    // full-colour logo from the Mac app (pale halo baked in)
+                    Image(name).resizable().scaledToFit().frame(width: 58, height: 58)
                 case .system(let name):
-                    Image(systemName: name).font(.system(size: 23, weight: .semibold)).foregroundStyle(tint)
+                    ZStack {
+                        Circle().fill(tint.opacity(0.15)).frame(width: 52, height: 52)
+                        Image(systemName: name).font(.system(size: 23, weight: .semibold)).foregroundStyle(tint)
+                    }
                 }
             }
+            .frame(height: 58, alignment: .leading)
             Text(title).font(.headline).foregroundStyle(.primary)
             Text(subtitle).font(.caption).foregroundStyle(.secondary)
         }
@@ -134,7 +137,7 @@ struct HomeTab: View {
 
                     Button { showPicker = true } label: {
                         TileLabel(title: "Choose vehicle", subtitle: "Make, model & year",
-                                  icon: .asset("icon-cars"), tint: MacTint.vehicle)
+                                  icon: .asset("icon-vehicle"), tint: MacTint.vehicle)
                     }.buttonStyle(.plain)
 
                 }
@@ -184,11 +187,7 @@ struct EmptyStateCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .center, spacing: 16) {
-                ZStack {
-                    Circle().fill(tint.opacity(0.15)).frame(width: 64, height: 64)
-                    Image(icon).renderingMode(.template).resizable().scaledToFit()
-                        .frame(width: 36, height: 36).foregroundStyle(tint)
-                }
+                Image(icon).resizable().scaledToFit().frame(width: 64, height: 64)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title).font(.headline)
                     Text(message).font(.subheadline).foregroundStyle(.secondary)
