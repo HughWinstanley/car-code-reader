@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "0.8 — Oct 9" }
+enum AppInfo { static let version = "0.9 — Oct 9" }
 enum Tab { case home, problems, live, smog, settings }
 
 struct ContentView: View {
@@ -76,6 +76,14 @@ struct HomeTab: View {
                                   icon: .asset("icon-scan"), tint: .orange)
                     }.buttonStyle(.plain)
 
+                    Button {
+                        if reader.connected { reader.scan() } else { reader.connect() }
+                        selection = .problems
+                    } label: {
+                        TileLabel(title: "ABS & airbag", subtitle: "Brake & airbag lights",
+                                  icon: .asset("icon-absbag"), tint: .red)
+                    }.buttonStyle(.plain)
+
                     Button { selection = .live } label: {
                         TileLabel(title: "Live data", subtitle: "RPM, speed, temps",
                                   icon: .asset("icon-gauge"), tint: .teal)
@@ -116,13 +124,8 @@ struct HomeTab: View {
                         if reader.connected { reader.clearCodes(); selection = .problems }
                     } label: {
                         TileLabel(title: "Clear codes", subtitle: "Turn off the light",
-                                  icon: .asset("icon-engine"), tint: .red)
+                                  icon: .asset("icon-engine"), tint: .pink)
                     }.buttonStyle(.plain).disabled(!reader.connected)
-
-                    Button { selection = .settings } label: {
-                        TileLabel(title: "Settings", subtitle: "Adapter",
-                                  icon: .system("gearshape"), tint: .gray)
-                    }.buttonStyle(.plain)
                 }
                 .padding(.horizontal, 14).padding(.top, 8)
             }
