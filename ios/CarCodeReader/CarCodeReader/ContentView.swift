@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "1.5 — Oct 9" }
+enum AppInfo { static let version = "1.6 — Oct 9" }
 enum Tab { case home, problems, live, smog, settings }
 
 extension Color {
@@ -95,51 +95,59 @@ struct HomeTab: View {
                     .frame(maxWidth: .infinity).padding(.horizontal).padding(.top, 4)
 
                 LazyVGrid(columns: cols, spacing: 14) {
+                    // Order matches the Mac app's home screen.
                     Button {
                         if reader.connected { reader.scan() } else { reader.connect() }
                         selection = .problems
                     } label: {
-                        TileLabel(title: "Scan for codes", subtitle: "Engine & transmission",
-                                  icon: .asset("icon-scan"), tint: MacTint.scan)
+                        TileLabel(title: "Engine codes", subtitle: "Check-engine and transmission codes",
+                                  icon: .asset("icon-engine"), tint: MacTint.engine)
                     }.buttonStyle(.plain)
 
                     Button {
                         if reader.connected { reader.scan() } else { reader.connect() }
                         selection = .problems
                     } label: {
-                        TileLabel(title: "ABS & airbag", subtitle: "Brake & airbag lights",
+                        TileLabel(title: "ABS and airbag", subtitle: "Brake and airbag warning lights",
                                   icon: .asset("icon-absbag"), tint: MacTint.safety)
                     }.buttonStyle(.plain)
 
+                    Button {
+                        if reader.connected { reader.scan() } else { reader.connect() }
+                        selection = .problems
+                    } label: {
+                        TileLabel(title: "Full scan", subtitle: "Everything at once",
+                                  icon: .asset("icon-scan"), tint: MacTint.scan)
+                    }.buttonStyle(.plain)
+
+                    NavigationLink {
+                        SemiView()
+                    } label: {
+                        TileLabel(title: "Semi trucks", subtitle: "Heavy-duty trucks, 9-pin port",
+                                  icon: .asset("icon-semi"), tint: MacTint.semi)
+                    }.buttonStyle(.plain)
+
                     Button { selection = .live } label: {
-                        TileLabel(title: "Live data", subtitle: "RPM, speed, temps",
+                        TileLabel(title: "Live data", subtitle: "Engine readings in real time",
                                   icon: .asset("icon-gauge"), tint: MacTint.gauge)
                     }.buttonStyle(.plain)
 
                     Button { selection = .smog } label: {
-                        TileLabel(title: "Smog check", subtitle: "Ready for inspection?",
+                        TileLabel(title: "Smog check", subtitle: "Ready for an emissions test?",
                                   icon: .asset("icon-smog"), tint: MacTint.smog)
                     }.buttonStyle(.plain)
 
                     NavigationLink {
                         OBD1View()
                     } label: {
-                        TileLabel(title: "OBD-I", subtitle: "1995 & older blink codes",
+                        TileLabel(title: "OBD-I", subtitle: "Blink codes (1995 & older), no adapter",
                                   icon: .asset("icon-blink"), tint: MacTint.old)
                     }.buttonStyle(.plain)
 
-                    NavigationLink {
-                        SemiView()
-                    } label: {
-                        TileLabel(title: "Semi trucks", subtitle: "Heavy-duty (J1939)",
-                                  icon: .asset("icon-semi"), tint: MacTint.semi)
-                    }.buttonStyle(.plain)
-
                     Button { showPicker = true } label: {
-                        TileLabel(title: "Choose vehicle", subtitle: "Make, model & year",
+                        TileLabel(title: "Choose vehicle", subtitle: "Make, model and year",
                                   icon: .asset("icon-vehicle"), tint: MacTint.vehicle)
                     }.buttonStyle(.plain)
-
                 }
                 .padding(.horizontal, 14).padding(.top, 8)
             }
