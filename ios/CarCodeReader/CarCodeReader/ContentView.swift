@@ -1,7 +1,31 @@
 import SwiftUI
 
-enum AppInfo { static let version = "1.2 — Oct 9" }
+enum AppInfo { static let version = "1.3 — Oct 9" }
 enum Tab { case home, problems, live, smog, settings }
+
+extension Color {
+    /// Build a colour from a "#RRGGBB" hex string (matches the Mac app's exact tints).
+    init(hex: String) {
+        let s = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        var v: UInt64 = 0
+        Scanner(string: s).scanHexInt64(&v)
+        self = Color(red: Double((v >> 16) & 0xFF) / 255,
+                     green: Double((v >> 8) & 0xFF) / 255,
+                     blue: Double(v & 0xFF) / 255)
+    }
+}
+
+/// The exact logo colours from the Mac app (car_code_reader.py TINT).
+enum MacTint {
+    static let engine  = Color(hex: "#E08A00")
+    static let safety  = Color(hex: "#D9362B")
+    static let scan    = Color(hex: "#6C4BD1")
+    static let gauge   = Color(hex: "#0F8B8D")
+    static let smog    = Color(hex: "#1E8A4A")
+    static let vehicle = Color(hex: "#1F6FD1")
+    static let semi    = Color(hex: "#B4532A")
+    static let old     = Color(hex: "#7A5A2E")
+}
 
 struct ContentView: View {
     @EnvironmentObject var reader: Reader
@@ -73,7 +97,7 @@ struct HomeTab: View {
                         selection = .problems
                     } label: {
                         TileLabel(title: "Scan for codes", subtitle: "Engine & transmission",
-                                  icon: .asset("icon-scan"), tint: .orange)
+                                  icon: .asset("icon-scan"), tint: MacTint.scan)
                     }.buttonStyle(.plain)
 
                     Button {
@@ -81,43 +105,43 @@ struct HomeTab: View {
                         selection = .problems
                     } label: {
                         TileLabel(title: "ABS & airbag", subtitle: "Brake & airbag lights",
-                                  icon: .asset("icon-absbag"), tint: .red)
+                                  icon: .asset("icon-absbag"), tint: MacTint.safety)
                     }.buttonStyle(.plain)
 
                     Button { selection = .live } label: {
                         TileLabel(title: "Live data", subtitle: "RPM, speed, temps",
-                                  icon: .asset("icon-gauge"), tint: .teal)
+                                  icon: .asset("icon-gauge"), tint: MacTint.gauge)
                     }.buttonStyle(.plain)
 
                     Button { selection = .smog } label: {
                         TileLabel(title: "Smog check", subtitle: "Ready for inspection?",
-                                  icon: .asset("icon-smog"), tint: .green)
+                                  icon: .asset("icon-smog"), tint: MacTint.smog)
                     }.buttonStyle(.plain)
 
                     NavigationLink {
                         OBD1View()
                     } label: {
                         TileLabel(title: "OBD-I", subtitle: "1995 & older blink codes",
-                                  icon: .asset("icon-blink"), tint: .brown)
+                                  icon: .asset("icon-blink"), tint: MacTint.old)
                     }.buttonStyle(.plain)
 
                     NavigationLink {
                         SemiView()
                     } label: {
                         TileLabel(title: "Semi trucks", subtitle: "Heavy-duty (J1939)",
-                                  icon: .asset("icon-semi"), tint: .indigo)
+                                  icon: .asset("icon-semi"), tint: MacTint.semi)
                     }.buttonStyle(.plain)
 
                     Button { showPicker = true } label: {
                         TileLabel(title: "Choose vehicle", subtitle: "Make, model & year",
-                                  icon: .asset("icon-cars"), tint: .purple)
+                                  icon: .asset("icon-cars"), tint: MacTint.vehicle)
                     }.buttonStyle(.plain)
 
                     Button {
                         if reader.connected { reader.clearCodes(); selection = .problems }
                     } label: {
                         TileLabel(title: "Clear codes", subtitle: "Turn off the light",
-                                  icon: .asset("icon-engine"), tint: .pink)
+                                  icon: .asset("icon-engine"), tint: MacTint.engine)
                     }.buttonStyle(.plain).disabled(!reader.connected)
                 }
                 .padding(.horizontal, 14).padding(.top, 8)
@@ -233,7 +257,7 @@ struct ProblemsTab: View {
             if !reader.connected {
                 NotConnectedView(
                     subtitle: "Trouble codes from the engine, transmission and other modules, in plain language.",
-                    icon: "icon-engine", tint: .orange,
+                    icon: "icon-engine", tint: MacTint.engine,
                     message: "Plug the adapter in, turn the key to ON, then connect to scan for codes.")
             } else {
             VStack {
@@ -286,7 +310,7 @@ struct LiveTab: View {
                 } else {
                     NotConnectedView(
                         subtitle: "What the engine computer sees right now. Values update about once a second.",
-                        icon: "icon-gauge", tint: .teal,
+                        icon: "icon-gauge", tint: MacTint.gauge,
                         message: "Plug the adapter in, turn the key to ON, then connect to see live readings.")
                 }
             }
@@ -305,7 +329,7 @@ struct SmogTab: View {
                 if !reader.connected {
                     NotConnectedView(
                         subtitle: "Whether the vehicle's self-tests are done, so it can pass an emissions inspection.",
-                        icon: "icon-smog", tint: .green,
+                        icon: "icon-smog", tint: MacTint.smog,
                         message: "Connect and scan to see whether the vehicle is ready for inspection.")
                 } else if reader.monitors.isEmpty {
                     Text("Tap Check again to read the self-tests.")
