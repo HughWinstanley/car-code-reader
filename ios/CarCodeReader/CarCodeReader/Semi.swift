@@ -64,37 +64,53 @@ struct SemiView: View {
     var faults: [J1939Fault] { showExample ? J1939.example : reader.semiFaults }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(spacing: 10) {
-                Text(reader.semiStatus.isEmpty ? "Reads heavy-duty truck codes over the J1939 network (9-pin port)."
-                                               : reader.semiStatus)
-                    .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                HStack {
-                    Button("Read from truck") { showExample = false; reader.readSemi() }
-                        .buttonStyle(.borderedProminent).disabled(reader.busy || !reader.connected)
-                    Button(showExample ? "Hide example" : "See an example") { showExample.toggle() }
-                        .buttonStyle(.bordered)
-                }
-                if !reader.connected {
-                    Text("Connect first on the Problems tab, with a J1939-capable adapter on the truck.")
-                        .font(.caption2).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                }
-            }
-            .frame(maxWidth: .infinity).padding()
-
-            List(faults) { f in
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack {
-                        Text("SPN \(f.spn) · FMI \(f.fmi)").font(.headline)
-                        Spacer()
-                        Text(f.active ? "Active" : "Previous").font(.caption)
-                            .foregroundStyle(f.active ? .red : .gray)
+        Group {
+            if !reader.connected && !showExample {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Reads heavy-duty truck codes over the J1939 network (9-pin port).")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true).padding(.horizontal)
+                        EmptyStateCard(icon: "icon-semi", tint: MacTint.semi, title: "Not connected yet",
+                                       message: "Plug a J1939-capable adapter into the truck's 9-pin port, then connect.")
+                        Button("See an example") { showExample = true }
+                            .buttonStyle(.bordered).padding(.horizontal)
                     }
-                    Text(f.title).font(.subheadline)
-                    Text(f.detail).font(.caption).foregroundStyle(.secondary)
+                    .padding(.top, 8)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    VStack(spacing: 10) {
+                        Text(reader.semiStatus.isEmpty
+                             ? "Reads heavy-duty truck codes over the J1939 network (9-pin port)."
+                             : reader.semiStatus)
+                            .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        HStack {
+                            if reader.connected {
+                                Button("Read from truck") { showExample = false; reader.readSemi() }
+                                    .buttonStyle(.borderedProminent).disabled(reader.busy)
+                            }
+                            Button(showExample ? "Hide example" : "See an example") { showExample.toggle() }
+                                .buttonStyle(.bordered)
+                        }
+                    }
+                    .frame(maxWidth: .infinity).padding()
+
+                    List(faults) { f in
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Text("SPN \(f.spn) · FMI \(f.fmi)").font(.headline)
+                                Spacer()
+                                Text(f.active ? "Active" : "Previous").font(.caption)
+                                    .foregroundStyle(f.active ? .red : .gray)
+                            }
+                            Text(f.title).font(.subheadline)
+                            Text(f.detail).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    .listStyle(.plain)
                 }
             }
-            .listStyle(.plain)
         }
         .navigationTitle("Semi trucks")
         .navigationBarTitleDisplayMode(.inline)

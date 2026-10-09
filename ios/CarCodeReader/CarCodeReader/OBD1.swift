@@ -20,10 +20,27 @@ struct OBD1View: View {
     var body: some View {
         Form {
             Section {
-                Picker("Make", selection: $group) {
-                    ForEach(groups, id: \.self) { Text($0).tag($0) }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(groups, id: \.self) { g in
+                            Button { group = g } label: {
+                                VStack(spacing: 6) {
+                                    MakeBadge(make: g, size: 50)
+                                    Text(g).font(.caption2)
+                                        .foregroundStyle(group == g ? .primary : .secondary)
+                                }
+                                .padding(8)
+                                .background(RoundedRectangle(cornerRadius: 12)
+                                    .fill(group == g ? Color.accentColor.opacity(0.12) : Color.clear))
+                                .overlay(RoundedRectangle(cornerRadius: 12)
+                                    .stroke(group == g ? Color.accentColor : Color.clear, lineWidth: 1.5))
+                            }.buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.vertical, 4)
                 }
-                .pickerStyle(.segmented)
+            } header: {
+                Text("Pick the make")
             } footer: {
                 Text("1995 and older vehicles have no data port standard — you read the codes by watching the dash light flash. No adapter needed.")
             }

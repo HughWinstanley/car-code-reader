@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "1.7 — Oct 9" }
+enum AppInfo { static let version = "1.8 — Oct 9" }
 enum Tab { case home, problems, live, smog, settings }
 
 extension Color {
@@ -35,7 +35,7 @@ struct ContentView: View {
             HomeTab(selection: $selection).tabItem { Label("Home", systemImage: "house") }.tag(Tab.home)
             ProblemsTab().tabItem { Label("Problems", systemImage: "exclamationmark.triangle") }.tag(Tab.problems)
             LiveTab().tabItem { Label("Live", systemImage: "gauge") }.tag(Tab.live)
-            SmogTab().tabItem { Label("Smog", systemImage: "checkmark.seal") }.tag(Tab.smog)
+            SmogTab().tabItem { Label("Smog", image: "tab-smog") }.tag(Tab.smog)
             SettingsTab().tabItem { Label("Settings", systemImage: "gearshape") }.tag(Tab.settings)
         }
     }
