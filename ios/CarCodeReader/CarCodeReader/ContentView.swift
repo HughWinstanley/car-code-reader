@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "0.7 — Oct 9" }
+enum AppInfo { static let version = "0.8 — Oct 9" }
 enum Tab { case home, problems, live, smog, settings }
 
 struct ContentView: View {
@@ -19,17 +19,29 @@ struct ContentView: View {
 
 // MARK: - Home
 
+/// Either a hand-drawn asset icon (ported from the Mac app) or an SF Symbol.
+enum TileIcon {
+    case asset(String)
+    case system(String)
+}
+
 /// The coloured icon-and-text card used on the Home grid.
 struct TileLabel: View {
     let title: String
     let subtitle: String
-    let system: String
+    let icon: TileIcon
     let tint: Color
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             ZStack {
                 Circle().fill(tint.opacity(0.15)).frame(width: 52, height: 52)
-                Image(systemName: system).font(.system(size: 23, weight: .semibold)).foregroundStyle(tint)
+                switch icon {
+                case .asset(let name):
+                    Image(name).renderingMode(.template).resizable().scaledToFit()
+                        .frame(width: 30, height: 30).foregroundStyle(tint)
+                case .system(let name):
+                    Image(systemName: name).font(.system(size: 23, weight: .semibold)).foregroundStyle(tint)
+                }
             }
             Text(title).font(.headline).foregroundStyle(.primary)
             Text(subtitle).font(.caption).foregroundStyle(.secondary)
@@ -61,55 +73,55 @@ struct HomeTab: View {
                         selection = .problems
                     } label: {
                         TileLabel(title: "Scan for codes", subtitle: "Engine & transmission",
-                                  system: "magnifyingglass", tint: .orange)
+                                  icon: .asset("icon-scan"), tint: .orange)
                     }.buttonStyle(.plain)
 
                     Button { selection = .live } label: {
                         TileLabel(title: "Live data", subtitle: "RPM, speed, temps",
-                                  system: "gauge", tint: .teal)
+                                  icon: .asset("icon-gauge"), tint: .teal)
                     }.buttonStyle(.plain)
 
                     Button { selection = .smog } label: {
                         TileLabel(title: "Smog check", subtitle: "Ready for inspection?",
-                                  system: "checkmark.seal", tint: .green)
+                                  icon: .asset("icon-smog"), tint: .green)
                     }.buttonStyle(.plain)
 
                     NavigationLink {
                         VehicleView()
                     } label: {
                         TileLabel(title: "Vehicle", subtitle: "VIN, battery, protocol",
-                                  system: "car", tint: .blue)
+                                  icon: .asset("icon-vehicle"), tint: .blue)
                     }.buttonStyle(.plain)
 
                     NavigationLink {
                         OBD1View()
                     } label: {
                         TileLabel(title: "OBD-I", subtitle: "1995 & older blink codes",
-                                  system: "lightbulb", tint: .brown)
+                                  icon: .asset("icon-blink"), tint: .brown)
                     }.buttonStyle(.plain)
 
                     NavigationLink {
                         SemiView()
                     } label: {
                         TileLabel(title: "Semi trucks", subtitle: "Heavy-duty (J1939)",
-                                  system: "box.truck", tint: .indigo)
+                                  icon: .asset("icon-semi"), tint: .indigo)
                     }.buttonStyle(.plain)
 
                     Button { showPicker = true } label: {
                         TileLabel(title: "Choose vehicle", subtitle: "Make, model & year",
-                                  system: "car.2", tint: .purple)
+                                  icon: .asset("icon-cars"), tint: .purple)
                     }.buttonStyle(.plain)
 
                     Button {
                         if reader.connected { reader.clearCodes(); selection = .problems }
                     } label: {
                         TileLabel(title: "Clear codes", subtitle: "Turn off the light",
-                                  system: "bolt.slash", tint: .red)
+                                  icon: .asset("icon-engine"), tint: .red)
                     }.buttonStyle(.plain).disabled(!reader.connected)
 
                     Button { selection = .settings } label: {
-                        TileLabel(title: "Settings", subtitle: "Adapter & make",
-                                  system: "gearshape", tint: .gray)
+                        TileLabel(title: "Settings", subtitle: "Adapter",
+                                  icon: .system("gearshape"), tint: .gray)
                     }.buttonStyle(.plain)
                 }
                 .padding(.horizontal, 14).padding(.top, 8)
