@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "1.9 — Oct 9" }
+enum AppInfo { static let version = "2.0 — Oct 9" }
 enum Tab { case home, problems, live, smog, settings }
 
 extension Color {
