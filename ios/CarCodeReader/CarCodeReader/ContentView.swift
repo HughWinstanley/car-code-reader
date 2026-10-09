@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "0.4 — Oct 9" }
+enum AppInfo { static let version = "0.5 — Oct 9" }
 enum Tab { case home, problems, live, smog, settings }
 
 struct ContentView: View {
@@ -78,6 +78,20 @@ struct HomeTab: View {
                     } label: {
                         TileLabel(title: "Vehicle", subtitle: "VIN, battery, protocol",
                                   system: "car", tint: .blue)
+                    }.buttonStyle(.plain)
+
+                    NavigationLink {
+                        OBD1View()
+                    } label: {
+                        TileLabel(title: "OBD-I", subtitle: "1995 & older blink codes",
+                                  system: "lightbulb", tint: .brown)
+                    }.buttonStyle(.plain)
+
+                    NavigationLink {
+                        SemiView()
+                    } label: {
+                        TileLabel(title: "Semi trucks", subtitle: "Heavy-duty (J1939)",
+                                  system: "box.truck", tint: .indigo)
                     }.buttonStyle(.plain)
 
                     Button {

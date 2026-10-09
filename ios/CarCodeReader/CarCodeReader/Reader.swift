@@ -28,6 +28,8 @@ final class Reader: ObservableObject {
     @Published var vin = ""
     @Published var battery = ""
     @Published var protocolName = ""
+    @Published var semiFaults: [J1939Fault] = []
+    @Published var semiStatus = ""
 
     // Connection choice
     @Published var useBluetooth = false
@@ -122,6 +124,28 @@ final class Reader: ObservableObject {
     private func readVehicleInternal(_ e: ELM327) async {
         vin = (try? await e.readVIN()) ?? ""
         battery = (try? await e.voltage()) ?? ""
+    }
+
+    func readSemi() {
+        guard let link = link else { semiStatus = "Connect on the Problems tab first."; return }
+        guard !busy else { return }
+        busy = true; semiStatus = "Listening to the truck's J1939 network…"; semiFaults = []
+        Task {
+            do {
+                _ = try await link.command("ATSP A")                 // SAE J1939
+                _ = try await link.command("ATH1")                   // show message IDs
+                _ = try await link.command("ATCAF0")                 // no auto formatting
+                let dump = try await link.command("ATMA", timeout: 3) // ~3s of broadcasts
+                _ = try? await link.command("ATH0")                  // any command stops the monitor
+                semiFaults = J1939.parseMonitor(dump)
+                semiStatus = semiFaults.isEmpty
+                    ? "No fault broadcasts seen. The truck may have none, or needs a J1939-capable adapter."
+                    : "\(semiFaults.count) fault\(semiFaults.count == 1 ? "" : "s") found."
+            } catch {
+                semiStatus = "Couldn't read: \(error.localizedDescription)"
+            }
+            busy = false
+        }
     }
 
     func toggleLive() {
