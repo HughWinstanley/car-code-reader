@@ -74,6 +74,22 @@ final class ELM327 {
         return Array(bytes[(i + 2)...])
     }
 
+    /// Read a manufacturer-specific value via mode $22 (e.g. Ford/GM transmission fluid temp).
+    /// Returns the data bytes after the 2-byte identifier echo.
+    func readMode22(_ did: UInt16) async throws -> [UInt8]? {
+        let hi = UInt8(did >> 8), lo = UInt8(did & 0xFF)
+        let cmd = String(format: "22%02X%02X", hi, lo)
+        let bytes = ELM327.hexBytes(try await link.command(cmd, timeout: 4))
+        guard let i = ELM327.find3(bytes, 0x62, hi, lo) else { return nil }
+        return Array(bytes[(i + 3)...])
+    }
+
+    static func find3(_ bytes: [UInt8], _ a: UInt8, _ b: UInt8, _ c: UInt8) -> Int? {
+        guard bytes.count >= 3 else { return nil }
+        for i in 0...(bytes.count - 3) where bytes[i] == a && bytes[i + 1] == b && bytes[i + 2] == c { return i }
+        return nil
+    }
+
     // MARK: parsing helpers
     static func hexBytes(_ reply: String) -> [UInt8] {
         var bytes: [UInt8] = []

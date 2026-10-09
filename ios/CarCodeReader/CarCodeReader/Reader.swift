@@ -205,6 +205,7 @@ final class Reader: ObservableObject {
             LiveReading(name: "Throttle position", value: "14 %"),
             LiveReading(name: "Short-term fuel trim", value: "+6 %"),
             LiveReading(name: "Mass airflow (MAF)", value: "3.1 g/s"),
+            LiveReading(name: "Transmission fluid temp", value: "174 °F  (79 °C)"),
         ]
         liveRunning = false
 
@@ -274,6 +275,18 @@ final class Reader: ObservableObject {
                 for p in PIDs.list {
                     if let data = try? await e.pid(p.pid), data.count >= p.len {
                         out.append(LiveReading(name: p.name, value: p.format(p.decode(data))))
+                    }
+                }
+                // Factory transmission fluid temperature (Ford/GM), read via mode $22 like the Mac app.
+                if make == .ford, let d = try? await e.readMode22(0x1E1C), d.count >= 2 {
+                    let c = Double(Int16(bitPattern: UInt16(d[0]) << 8 | UInt16(d[1]))) / 16
+                    if (-40...180).contains(c) {
+                        out.append(LiveReading(name: "Transmission fluid temp", value: PIDs.f(c, "degC")))
+                    }
+                } else if make == .gm, let d = try? await e.readMode22(0x1940), d.count >= 1 {
+                    let c = Double(d[0]) - 40
+                    if (-40...180).contains(c) {
+                        out.append(LiveReading(name: "Transmission fluid temp", value: PIDs.f(c, "degC")))
                     }
                 }
                 if !out.isEmpty { live = out }
