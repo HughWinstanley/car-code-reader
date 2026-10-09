@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "2.5 — Oct 9" }
+enum AppInfo { static let version = "2.6 — Oct 9" }
 enum Tab { case home, problems, live, smog, settings }
 
 extension Color {
@@ -303,11 +303,15 @@ struct ProblemsTab: View {
                                 if let f = p.factory { Text("\(f) factory meaning").font(.caption2).foregroundStyle(.secondary) }
                             }
                         }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) { reader.removeProblem(p) } label: {
+                                Label("Clear code", systemImage: "bolt.slash")
+                            }
+                        }
                     }
-                    .onDelete { reader.removeProblem(at: $0) }
 
                     if !reader.problems.isEmpty {
-                        Text("Swipe a code left to remove it from this list. Note: a car can only erase all codes at once (the button below) — one-at-a-time erasing isn't something the OBD port supports.")
+                        Text("Swipe a code left to clear it from this list. Note: a car can only erase all codes at once (the button below) — one-at-a-time erasing isn't something the OBD port supports.")
                             .font(.caption2).foregroundStyle(.secondary)
                     }
                 }.listStyle(.plain)

@@ -138,9 +138,9 @@ final class Reader: ObservableObject {
         }
     }
 
-    /// Remove one code from the list (swipe-to-delete). See note in the UI about what this means on a real car.
-    func removeProblem(at offsets: IndexSet) {
-        problems.remove(atOffsets: offsets)
+    /// Remove one code from the list (swipe "Clear code"). See the UI note about what this means on a real car.
+    func removeProblem(_ p: Problem) {
+        problems.removeAll { $0.id == p.id }
         status = problems.isEmpty ? "No codes shown." : "\(problems.count) code\(problems.count == 1 ? "" : "s") shown."
     }
 
