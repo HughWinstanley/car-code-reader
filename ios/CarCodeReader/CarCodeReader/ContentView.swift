@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "0.5 — Oct 9" }
+enum AppInfo { static let version = "0.6 — Oct 9" }
 enum Tab { case home, problems, live, smog, settings }
 
 struct ContentView: View {
@@ -44,6 +44,7 @@ struct TileLabel: View {
 struct HomeTab: View {
     @EnvironmentObject var reader: Reader
     @Binding var selection: Tab
+    @State private var showPicker = false
     private let cols = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
 
     var body: some View {
@@ -94,6 +95,11 @@ struct HomeTab: View {
                                   system: "box.truck", tint: .indigo)
                     }.buttonStyle(.plain)
 
+                    Button { showPicker = true } label: {
+                        TileLabel(title: "Choose vehicle", subtitle: "Make, model & year",
+                                  system: "car.2", tint: .purple)
+                    }.buttonStyle(.plain)
+
                     Button {
                         if reader.connected { reader.clearCodes(); selection = .problems }
                     } label: {
@@ -109,6 +115,7 @@ struct HomeTab: View {
                 .padding(.horizontal, 14).padding(.top, 8)
             }
             .navigationTitle("Car Code Reader")
+            .sheet(isPresented: $showPicker) { VehiclePickerSheet() }
         }
     }
 }
@@ -154,14 +161,18 @@ struct ProblemsTab: View {
                     Spacer(); Label("No codes found", systemImage: "checkmark.circle").foregroundStyle(.green).font(.title3); Spacer()
                 }
                 List(reader.problems) { p in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text(p.code).font(.headline)
-                            Spacer()
-                            Text(p.status).font(.caption).foregroundStyle(color(p.urgency))
+                    NavigationLink {
+                        ProblemDetailView(problem: p)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text(p.code).font(.headline)
+                                Spacer()
+                                Text(p.status).font(.caption).foregroundStyle(color(p.urgency))
+                            }
+                            Text(p.meaning).font(.subheadline).foregroundStyle(.secondary)
+                            if let f = p.factory { Text("\(f) factory meaning").font(.caption2).foregroundStyle(.secondary) }
                         }
-                        Text(p.meaning).font(.subheadline).foregroundStyle(.secondary)
-                        if let f = p.factory { Text("\(f) factory meaning").font(.caption2).foregroundStyle(.secondary) }
                     }
                 }.listStyle(.plain)
                 if reader.connected && !reader.problems.isEmpty {
@@ -236,6 +247,7 @@ struct VehicleView: View {
     var body: some View {
         Form {
             Section("Vehicle") {
+                if !reader.chosenName.isEmpty { row("Chosen", reader.chosenName) }
                 row("VIN", reader.vin)
                 row("Battery", reader.battery)
                 row("Protocol", reader.protocolName)

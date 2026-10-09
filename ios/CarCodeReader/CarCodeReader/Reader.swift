@@ -37,6 +37,7 @@ final class Reader: ObservableObject {
     @Published var port = "35000"
     @Published var make: Make = .other
     @Published var year: Int? = nil
+    @Published var chosenName = ""
 
     private var link: OBDLink?
     private var elm: ELM327?
@@ -87,7 +88,7 @@ final class Reader: ObservableObject {
             problems = dtcs.map {
                 let (text, factory) = DTC.describe($0.code, make: make)
                 return Problem(code: $0.code, meaning: text, status: $0.status,
-                               urgency: DTC.urgency($0.code, status: $0.status, module: "Engine"),
+                               urgency: CodeDetail.severity($0.code, status: $0.status, module: "Engine"),
                                factory: factory)
             }
             scanned = true
@@ -124,6 +125,13 @@ final class Reader: ObservableObject {
     private func readVehicleInternal(_ e: ELM327) async {
         vin = (try? await e.readVIN()) ?? ""
         battery = (try? await e.voltage()) ?? ""
+    }
+
+    func setVehicle(makeName: String, model: String, year: Int) {
+        let fam = VehicleData.family[makeName] ?? "Other"
+        make = (fam == "Ford") ? .ford : (fam == "GM" ? .gm : .other)
+        self.year = year
+        chosenName = "\(year) \(makeName) \(model)"
     }
 
     func readSemi() {

@@ -19,6 +19,8 @@
 		18D1D1C4E32719A7C95E42CA /* OBD1J1939Data.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2CF87C8E586C39C027BFD1BF /* OBD1J1939Data.swift */; };
 		B29961A23D262CE4199D4494 /* OBD1.swift in Sources */ = {isa = PBXBuildFile; fileRef = D98CDC6BD6D24614E6C31362 /* OBD1.swift */; };
 		BF6D25DA9B80198D3C1855D5 /* Semi.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FE63F923D748A14A9968E3C /* Semi.swift */; };
+		914F87EEB365C38B52E60421 /* VehicleCodeData.swift in Sources */ = {isa = PBXBuildFile; fileRef = F250AFC2D79AB139C53861BD /* VehicleCodeData.swift */; };
+		FCC658EA4B65544C5E0164A7 /* Screens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E00E37A41FBD64517C00D25 /* Screens.swift */; };
 		1228440DDBCFF603473E79E6 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 255D1FE58E2386F38D9AE609 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 /* Begin PBXFileReference section */
@@ -36,6 +38,8 @@
 		2CF87C8E586C39C027BFD1BF /* OBD1J1939Data.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OBD1J1939Data.swift"; sourceTree = "<group>"; };
 		D98CDC6BD6D24614E6C31362 /* OBD1.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "OBD1.swift"; sourceTree = "<group>"; };
 		0FE63F923D748A14A9968E3C /* Semi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Semi.swift"; sourceTree = "<group>"; };
+		F250AFC2D79AB139C53861BD /* VehicleCodeData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VehicleCodeData.swift"; sourceTree = "<group>"; };
+		4E00E37A41FBD64517C00D25 /* Screens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Screens.swift"; sourceTree = "<group>"; };
 		255D1FE58E2386F38D9AE609 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		38A007151ABE87CC01A5B6E9 /* CarCodeReader.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CarCodeReader.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -43,10 +47,7 @@
 		D1897DBBE7DC4EBFD5751F23 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 /* Begin PBXGroup section */
-		81B6A57DEDA76992CF92A034 = {isa = PBXGroup; children = (
-			6850F8BFB511F154BC01A524 /* CarCodeReader */,
-			550258979F7021997C570D6F /* Products */,
-		); sourceTree = "<group>"; };
+		81B6A57DEDA76992CF92A034 = {isa = PBXGroup; children = ( 6850F8BFB511F154BC01A524 /* CarCodeReader */, 550258979F7021997C570D6F /* Products */, ); sourceTree = "<group>"; };
 		6850F8BFB511F154BC01A524 /* CarCodeReader */ = {isa = PBXGroup; children = (
 			B389D3FA4FF8BE7D04E9BA86 /* CarCodeReaderApp.swift */,
 			39AAA60214B0F4739A7AFFF2 /* ContentView.swift */,
@@ -62,6 +63,8 @@
 			2CF87C8E586C39C027BFD1BF /* OBD1J1939Data.swift */,
 			D98CDC6BD6D24614E6C31362 /* OBD1.swift */,
 			0FE63F923D748A14A9968E3C /* Semi.swift */,
+			F250AFC2D79AB139C53861BD /* VehicleCodeData.swift */,
+			4E00E37A41FBD64517C00D25 /* Screens.swift */,
 			255D1FE58E2386F38D9AE609 /* Assets.xcassets */,
 		); path = CarCodeReader; sourceTree = "<group>"; };
 		550258979F7021997C570D6F /* Products */ = {isa = PBXGroup; children = ( 38A007151ABE87CC01A5B6E9 /* CarCodeReader.app */, ); name = Products; sourceTree = "<group>"; };
@@ -91,6 +94,8 @@
 			18D1D1C4E32719A7C95E42CA /* OBD1J1939Data.swift in Sources */,
 			B29961A23D262CE4199D4494 /* OBD1.swift in Sources */,
 			BF6D25DA9B80198D3C1855D5 /* Semi.swift in Sources */,
+			914F87EEB365C38B52E60421 /* VehicleCodeData.swift in Sources */,
+			FCC658EA4B65544C5E0164A7 /* Screens.swift in Sources */,
 		); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 /* Begin XCBuildConfiguration section */
