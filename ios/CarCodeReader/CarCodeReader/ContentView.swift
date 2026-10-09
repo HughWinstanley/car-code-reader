@@ -1,5 +1,7 @@
 import SwiftUI
 
+enum AppInfo { static let version = "0.2 — Oct 9" }
+
 struct ContentView: View {
     @EnvironmentObject var reader: Reader
     var body: some View {
@@ -139,6 +141,9 @@ struct VehicleTab: View {
                     Picker("Make", selection: $reader.make) {
                         Text("Other").tag(Make.other); Text("Ford / Lincoln / Mercury").tag(Make.ford); Text("GM (Chevy / GMC …)").tag(Make.gm)
                     }
+                }
+                Section("About") {
+                    HStack { Text("App version").foregroundStyle(.secondary); Spacer(); Text(AppInfo.version).fontWeight(.semibold) }
                 }
             }
             .navigationTitle("Vehicle")
