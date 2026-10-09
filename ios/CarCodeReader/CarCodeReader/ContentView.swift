@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "0.6 — Oct 9" }
+enum AppInfo { static let version = "0.7 — Oct 9" }
 enum Tab { case home, problems, live, smog, settings }
 
 struct ContentView: View {
@@ -289,13 +289,6 @@ struct SettingsTab: View {
                     Text("Wi-Fi adapters make their own Wi-Fi network — join it in the iPhone's Settings first. The OBDLink MX+ (classic Bluetooth) isn't supported here; use a Wi-Fi or BLE adapter.")
                 }
 
-                Section("Vehicle make (for factory code meanings)") {
-                    Picker("Make", selection: $reader.make) {
-                        Text("Other").tag(Make.other)
-                        Text("Ford / Lincoln / Mercury").tag(Make.ford)
-                        Text("GM (Chevy / GMC …)").tag(Make.gm)
-                    }
-                }
 
                 Section("About") {
                     HStack { Text("App version").foregroundStyle(.secondary); Spacer(); Text(AppInfo.version).fontWeight(.semibold) }
