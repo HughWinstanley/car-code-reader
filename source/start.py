@@ -66,7 +66,33 @@ def _selftest():
           "from", os.path.dirname(car_code_reader.__file__))
 
 
+def _set_dpi_awareness():
+    """Declare the process Per-Monitor-V2 DPI aware BEFORE any window exists, so Windows renders
+    the Tk canvas drawings (every icon) at full resolution instead of bitmap-stretching them.
+    This must run as early as possible — before tkinter is imported or a window is created."""
+    if os.name != "nt":
+        return
+    import ctypes
+    user32 = ctypes.windll.user32
+    # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4 (Windows 10 1703+). This is the mode that
+    # makes GDI draw lines/shapes crisp, not just text.
+    for ctx in (-4, -3):  # -3 = PER_MONITOR_AWARE as a fallback on older builds
+        try:
+            if user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(ctx)):
+                return
+        except Exception:  # noqa: BLE001 - API missing on older Windows
+            break
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # per-monitor v1
+    except Exception:  # noqa: BLE001
+        try:
+            user32.SetProcessDPIAware()                 # system aware (oldest fallback)
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def main():
+    _set_dpi_awareness()
     upd = _updates_dir()
     use_update = (all(os.path.exists(os.path.join(upd, n)) for n in REQUIRED)
                   and _version(upd) > _version(HERE))

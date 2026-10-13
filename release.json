@@ -1,8 +1,8 @@
 {
-  "version": "2.28",
-  "notes": "Fix: codes now display on Windows (the 'last scanned' time used a Mac/Linux-only format that errored on Windows).",
+  "version": "2.29",
+  "notes": "Sharper icons on Windows: use Per-Monitor-V2 DPI awareness so the icon graphics render at full resolution.",
   "files": {
-    "car_code_reader.py": "084dad3ecfc6b74f2e26a1157b9405da4a6b70f7b31d1956d902bd51fc3d500f",
+    "car_code_reader.py": "4b7f40a998be81a2ea2e69e288af15c223afe612327645557e9d1a6e7092e69c",
     "obd_core.py": "4ee256565c8dd0cf9ef5b170a5390d2cbea0b1933b575309df17f5be56c2bd66",
     "dtc_database.py": "c2602d0123c271a96253dcac398ee67c2d0e4ed4366c91b13c7efe14557ec161",
     "icons.py": "ee6ab531fcf7008f0c40b5612eb419db8fd9ab755b8d2feceeaa7335f6d48175",

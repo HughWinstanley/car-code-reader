@@ -2840,16 +2840,24 @@ class App:
 
 def _enable_windows_hidpi():
     """On Windows, tell the OS we draw at full resolution so it doesn't bitmap-stretch
-    the window (which makes the hand-drawn icons and text look blurry on modern displays).
+    the window. Per-Monitor-V2 is the mode that makes the canvas-drawn icons (lines, arcs,
+    shapes) render crisp — the older modes keep text sharp but still stretch the graphics.
     Must run before the first Tk window is created."""
     if os.name != "nt":
         return
     import ctypes
-    try:                                  # Windows 10/11: per-monitor DPI awareness
-        ctypes.windll.shcore.SetProcessDpiAwareness(2)
-    except Exception:                     # noqa: BLE001 - older Windows
+    user32 = ctypes.windll.user32
+    for ctx in (-4, -3):                  # -4 = Per-Monitor-V2 (Win10 1703+), -3 = Per-Monitor
         try:
-            ctypes.windll.user32.SetProcessDPIAware()
+            if user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(ctx)):
+                return
+        except Exception:                 # noqa: BLE001 - API missing on older Windows
+            break
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:                     # noqa: BLE001
+        try:
+            user32.SetProcessDPIAware()
         except Exception:                 # noqa: BLE001
             pass
 
