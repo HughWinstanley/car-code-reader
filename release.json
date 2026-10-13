@@ -1,8 +1,8 @@
 {
-  "version": "2.26",
-  "notes": "Diagnostic build: logs each scan step to the adapter log.",
+  "version": "2.27",
+  "notes": "Fix: scan results and updates now always display (UI update pump no longer stops if one callback errors).",
   "files": {
-    "car_code_reader.py": "fe772792ffb64ae711b7d5d6977853cdb8b9fa22c09facf6f921dbfd8d1f7d87",
+    "car_code_reader.py": "3befa2a2abc4dbd32052da80ceaaa79f78b938e39ba690174ce812df767fe78a",
     "obd_core.py": "4ee256565c8dd0cf9ef5b170a5390d2cbea0b1933b575309df17f5be56c2bd66",
     "dtc_database.py": "c2602d0123c271a96253dcac398ee67c2d0e4ed4366c91b13c7efe14557ec161",
     "icons.py": "ee6ab531fcf7008f0c40b5612eb419db8fd9ab755b8d2feceeaa7335f6d48175",

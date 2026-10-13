@@ -655,9 +655,19 @@ class App:
         self.q.put(fn)
 
     def _drain(self):
+        # Pump queued UI updates. A single failing callback must NEVER stop the pump —
+        # otherwise every later update (scan results, progress, "update found") freezes
+        # while the window still looks alive. Each callback is isolated and its error logged.
         try:
             while True:
-                self.q.get_nowait()()
+                fn = self.q.get_nowait()
+                try:
+                    fn()
+                except Exception as e:  # noqa: BLE001
+                    try:
+                        self._append_log(f"UI error: {type(e).__name__}: {e}")
+                    except Exception:  # noqa: BLE001
+                        pass
         except queue.Empty:
             pass
         self.root.after(50, self._drain)
