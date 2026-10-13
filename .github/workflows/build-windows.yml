@@ -1,0 +1,90 @@
+name: Build Windows app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "source/start.py"
+      - "source/windows/**"
+      - "app/**"
+      - "release.json"
+      - ".github/workflows/build-windows.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: python -m pip install --upgrade pyinstaller pyserial
+
+      - name: Assemble the app files
+        shell: bash
+        run: |
+          set -e
+          mkdir -p work/app
+          cp app/* work/app/
+          VERSION=$(python -c "import json;print(json.load(open('release.json'))['version'])")
+          echo "VERSION = \"$VERSION\"" > work/app/version.py
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          cp source/start.py work/start.py
+
+      - name: Build with PyInstaller
+        working-directory: work
+        shell: bash
+        run: |
+          set -e
+          EXCL=""
+          for m in car_code_reader obd_core dtc_database icons vehicles version updater j1939 obd1 maker_codes recalls service_guides advanced history report; do
+            EXCL="$EXCL --exclude-module $m"
+          done
+          python -m PyInstaller --noconfirm --clean --windowed --onefile \
+            --name "Car Code Reader" \
+            --icon ../source/windows/AppIcon.ico \
+            --add-data "app;app" $EXCL start.py
+
+      - name: Self-test (prove the packed Python loads everything)
+        working-directory: work
+        shell: cmd
+        run: |
+          "dist\Car Code Reader.exe" --version
+          if errorlevel 1 exit /b 1
+
+      - name: Package the installer-style ZIP
+        working-directory: work
+        shell: bash
+        run: |
+          set -e
+          mkdir -p "Car Code Reader"
+          cp "dist/Car Code Reader.exe" "Car Code Reader/"
+          cp ../source/windows/README-Windows.txt "Car Code Reader/How to install.txt" 2>/dev/null || true
+          powershell -Command "Compress-Archive -Path 'Car Code Reader' -DestinationPath 'Car-Code-Reader-Windows.zip' -Force"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Car-Code-Reader-Windows
+          path: work/Car-Code-Reader-Windows.zip
+
+      - name: Publish the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          TAG="win-v$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" work/Car-Code-Reader-Windows.zip --clobber
+          else
+            gh release create "$TAG" work/Car-Code-Reader-Windows.zip \
+              --title "Car Code Reader $VERSION for Windows" \
+              --notes "Stand-alone Windows app: Python is built in. Download Car-Code-Reader-Windows.zip, unzip it, and run 'Car Code Reader.exe'. Windows SmartScreen may warn the first time (unknown publisher) — click 'More info' then 'Run anyway'."
+          fi
