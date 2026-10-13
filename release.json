@@ -1,8 +1,8 @@
 {
   "version": "2.25",
-  "notes": "Windows: crisp (high-DPI) icons and text. Plus the Windows app itself.",
+  "notes": "Windows: crisp high-DPI icons/text, and the code list now shows reliably after a scan.",
   "files": {
-    "car_code_reader.py": "a56f9d26eccffda447aafa463cd9ca9793a91009fca5aede183dc872785782a2",
+    "car_code_reader.py": "24e1551200ec64064e3dea83ca7e43580b5ea718e13bce2e405b485483d1bcf0",
     "obd_core.py": "4ee256565c8dd0cf9ef5b170a5390d2cbea0b1933b575309df17f5be56c2bd66",
     "dtc_database.py": "c2602d0123c271a96253dcac398ee67c2d0e4ed4366c91b13c7efe14557ec161",
     "icons.py": "ee6ab531fcf7008f0c40b5612eb419db8fd9ab755b8d2feceeaa7335f6d48175",

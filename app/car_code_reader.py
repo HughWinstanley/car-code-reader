@@ -267,6 +267,9 @@ class ScrollArea(tk.Frame):
             self._wheel(False)
 
     def _update(self):
+        w = self.canvas.winfo_width()            # make sure the inner frame fills the canvas even
+        if w > 1:                                # before the first <Configure> fires (matters on Windows,
+            self.canvas.itemconfigure(self._win, width=w)   # where rows could otherwise render at ~0 width)
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
         needed = self.inner.winfo_reqheight() > self.canvas.winfo_height() + 2
         if needed and not self.bar.winfo_ismapped():
@@ -1343,6 +1346,8 @@ class App:
             ProblemRow(inner, item, self).pack(fill="x", pady=(0, 10))
         if self.scanned and self.scan_kind != "engine":
             self._modules_note(inner)
+        inner.update_idletasks()   # force layout now, then refit the scroll area so the rows
+        self.list._update()        # are visible immediately instead of waiting for a resize event
         self._update_controls()
 
     def _connect_panel(self, parent):
