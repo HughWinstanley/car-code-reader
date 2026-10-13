@@ -2821,8 +2821,31 @@ class App:
         self.root.destroy()
 
 
+def _enable_windows_hidpi():
+    """On Windows, tell the OS we draw at full resolution so it doesn't bitmap-stretch
+    the window (which makes the hand-drawn icons and text look blurry on modern displays).
+    Must run before the first Tk window is created."""
+    if os.name != "nt":
+        return
+    import ctypes
+    try:                                  # Windows 10/11: per-monitor DPI awareness
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:                     # noqa: BLE001 - older Windows
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:                 # noqa: BLE001
+            pass
+
+
 def main():
+    _enable_windows_hidpi()
     root = tk.Tk()
+    if os.name == "nt":                   # match Tk's drawing scale to the screen's DPI
+        try:
+            dpi = root.winfo_fpixels("1i")   # pixels per inch for this display
+            root.tk.call("tk", "scaling", dpi / 72.0)
+        except Exception:                 # noqa: BLE001
+            pass
     App(root)
     root.mainloop()
 
