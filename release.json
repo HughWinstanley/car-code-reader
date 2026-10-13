@@ -1,8 +1,8 @@
 {
-  "version": "2.27",
-  "notes": "Fix: scan results and updates now always display (UI update pump no longer stops if one callback errors).",
+  "version": "2.28",
+  "notes": "Fix: codes now display on Windows (the 'last scanned' time used a Mac/Linux-only format that errored on Windows).",
   "files": {
-    "car_code_reader.py": "3befa2a2abc4dbd32052da80ceaaa79f78b938e39ba690174ce812df767fe78a",
+    "car_code_reader.py": "084dad3ecfc6b74f2e26a1157b9405da4a6b70f7b31d1956d902bd51fc3d500f",
     "obd_core.py": "4ee256565c8dd0cf9ef5b170a5390d2cbea0b1933b575309df17f5be56c2bd66",
     "dtc_database.py": "c2602d0123c271a96253dcac398ee67c2d0e4ed4366c91b13c7efe14557ec161",
     "icons.py": "ee6ab531fcf7008f0c40b5612eb419db8fd9ab755b8d2feceeaa7335f6d48175",

@@ -1321,8 +1321,10 @@ class App:
         self.scan_btn.set_text({"engine": "Scan engine again", "safety": "Scan ABS and airbag again"}.get(
             self.scan_kind, "Scan for problems"))
         when = getattr(self, "last_scan_at", None)
-        self.scan_time_lbl.configure(
-            text=f"Last scanned {when:%-I:%M:%S %p}" if self.scanned and when else "")
+        # Build the 12-hour time without %-I: that directive is Mac/Linux-only and raises
+        # "Invalid format string" on Windows, which would abort this whole redraw.
+        when_text = f"Last scanned {when.hour % 12 or 12}:{when:%M:%S %p}" if (self.scanned and when) else ""
+        self.scan_time_lbl.configure(text=when_text)
         if not self.scanned:
             self.lamp.set("busy" if self.busy else "off")
             self.headline.configure(text="Ready to scan")
@@ -1597,32 +1599,24 @@ class App:
 
         def work():
             obd, ready, modules = [], None, []
-            self.log(f"[scan] start kind={kind} can_modules={elm.can_scan_modules}")
             if kind in ("all", "engine"):
                 self.ui(lambda: self.set_step("Reading engine and transmission codes…", 0.05))
                 for mode, label in (("03", "Stored"), ("07", "Pending"), ("0A", "Permanent")):
                     for ecu, code in elm.read_dtcs(mode):
                         obd.append((code, ECU_NAMES.get(ecu, f"Module {ecu}"), label))
-                self.log(f"[scan] engine codes done ({len(obd)})")
                 self.ui(lambda: self.set_step("Checking the check-engine light and smog tests…", 0.12))
                 ready = elm.query_pid(1, 1)
-                self.log("[scan] readiness done")
             if kind in ("all", "safety") and elm.can_scan_modules:
-                self.log("[scan] building module list…")
                 targets = elm.module_targets(deep)
-                self.log(f"[scan] {len(targets)} modules to check")
                 if kind == "safety":
                     targets = [t for t in targets if is_safety_module(t[1])] or targets
 
                 def progress(i, n, name):
                     self.ui(lambda: self.set_step(f"Checking {name}…", 0.15 + 0.85 * (i + 1) / n))
                 modules = elm.module_scan(targets, progress, self.scan_stop)
-                self.log(f"[scan] module scan done ({len(modules)} answered)")
-            self.log("[scan] work() returning")
             return obd, ready, modules
 
         def done(res):
-            self.log("[scan] done() applying results")
             self._scanning = False
             obd, ready, modules = res
             if kind == "safety":
@@ -1661,11 +1655,9 @@ class App:
         if self.scan_kind != "safety":
             self.readiness = ready
             self.mil_on = bool(ready[0] & 0x80) if ready else None
-        self.log(f"[scan] applying {len(items)} items")
         self._save_history()
         self.refresh_problems()
         self.refresh_smog()
-        self.log("[scan] UI refreshed")
         hook, self._after_scan_hook = getattr(self, "_after_scan_hook", None), None
         if hook:
             hook()
