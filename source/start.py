@@ -21,8 +21,8 @@ if FROZEN:
 else:
     HERE = os.path.dirname(os.path.abspath(__file__))
 REQUIRED = ("car_code_reader.py", "obd_core.py", "dtc_database.py", "version.py")
-APP_MODULES = ("car_code_reader", "obd_core", "dtc_database", "icons", "vehicles", "version", "updater",
-               "j1939", "obd1", "maker_codes", "recalls", "service_guides",
+APP_MODULES = ("car_code_reader", "obd_core", "dtc_database", "icons", "icon_render", "vehicles",
+               "version", "updater", "j1939", "obd1", "maker_codes", "recalls", "service_guides",
                "advanced", "history", "report")
 
 
@@ -36,6 +36,7 @@ def _bundle_hints():  # pragma: no cover - never called
     import tkinter, tkinter.font, tkinter.ttk, tkinter.messagebox, tkinter.filedialog  # noqa
     import tkinter.scrolledtext  # noqa
     import serial, serial.tools.list_ports, serial.tools.list_ports_osx, serial.serialposix  # noqa
+    from PIL import Image, ImageDraw, ImageFont, ImageTk  # noqa - anti-aliased icon rendering
 
 
 def _updates_dir():

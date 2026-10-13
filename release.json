@@ -1,8 +1,8 @@
 {
-  "version": "2.29",
-  "notes": "Sharper icons on Windows: use Per-Monitor-V2 DPI awareness so the icon graphics render at full resolution.",
+  "version": "2.30",
+  "notes": "Crisp, anti-aliased icons (rendered with Pillow at high resolution).",
   "files": {
-    "car_code_reader.py": "4b7f40a998be81a2ea2e69e288af15c223afe612327645557e9d1a6e7092e69c",
+    "car_code_reader.py": "73d79e98ec4722ae25fd8f5faa881275dfcfc310185c8a3bc6fb67505d7101f5",
     "obd_core.py": "4ee256565c8dd0cf9ef5b170a5390d2cbea0b1933b575309df17f5be56c2bd66",
     "dtc_database.py": "c2602d0123c271a96253dcac398ee67c2d0e4ed4366c91b13c7efe14557ec161",
     "icons.py": "ee6ab531fcf7008f0c40b5612eb419db8fd9ab755b8d2feceeaa7335f6d48175",
@@ -16,6 +16,7 @@
     "advanced.py": "d86719dcacba258db6d3be28423cbaa3469de74741df6bfcc930db6ac9e692e9",
     "history.py": "2f780f96d539036c69221a2f4fa612a872f94f8b3e8e8b4af327028e95b7af2c",
     "report.py": "f22b764eab32a6d6710d1cf0adf70e2d6652e92e831b47659ac8230b3dacc176",
-    "icon.png": "635873108e9b9e6e7bd54b68695ad71151c96e2ff78cad1ed53db48a13a2f71c"
+    "icon.png": "635873108e9b9e6e7bd54b68695ad71151c96e2ff78cad1ed53db48a13a2f71c",
+    "icon_render.py": "ed1d4e433ea22f6cf6d46d3e52b20bbcb8adeceabffa087b5cef6e5cddbcd2ef"
   }
 }

@@ -25,7 +25,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tools
-        run: python -m pip install --upgrade pyinstaller pyserial
+        run: python -m pip install --upgrade pyinstaller pyserial pillow
 
       - name: Assemble the app files
         shell: bash
@@ -44,7 +44,7 @@ jobs:
         run: |
           set -e
           EXCL=""
-          for m in car_code_reader obd_core dtc_database icons vehicles version updater j1939 obd1 maker_codes recalls service_guides advanced history report; do
+          for m in car_code_reader obd_core dtc_database icons icon_render vehicles version updater j1939 obd1 maker_codes recalls service_guides advanced history report; do
             EXCL="$EXCL --exclude-module $m"
           done
           python -m PyInstaller --noconfirm --clean --windowed --onefile \

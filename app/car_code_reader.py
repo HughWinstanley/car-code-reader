@@ -28,6 +28,7 @@ from obd_core import (CONN_SERIAL, CONN_WIFI, CONN_DEMO, CONN_DEMO_OLD, CONN_DEM
                       year_from_vin)
 from dtc_database import decode_dtc_bytes, describe_dtc, severity, uds_status_text, why_it_matters
 import icons
+import icon_render
 import j1939
 import advanced
 import history
@@ -438,7 +439,13 @@ class Tile(tk.Canvas):
             title_size -= 1
             longest = max(F(title_size, "bold").measure(w) for w in title.split())
         top = 16
-        painter(self, width / 2, top + art / 2)
+        icx, icy = width / 2, top + art / 2
+        ph = icon_render.photo(painter, art, self.surface)   # smooth, anti-aliased render
+        if ph is not None:
+            self._iconphoto = ph                              # keep a ref so Tk doesn't drop it
+            self.create_image(icx, icy, image=ph)
+        else:
+            painter(self, icx, icy)                           # fallback: draw the vector icon
         t = self.create_text(width / 2, top + art + 8, text=title, fill=C["ink"], font=F(title_size, "bold"),
                              width=width - 24, justify="center", anchor="n")
         y = self.bbox(t)[3] + 4
