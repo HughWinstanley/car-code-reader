@@ -20,7 +20,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install build tools
-        run: python -m pip install --upgrade pyinstaller pyserial pillow
+        run: python -m pip install --upgrade pyinstaller pyserial
 
       - name: Assemble the app files
         run: |
@@ -37,7 +37,7 @@ jobs:
         run: |
           set -e
           EXCL=""
-          for m in car_code_reader obd_core dtc_database icons icon_render vehicles version updater j1939 obd1 maker_codes recalls service_guides advanced history report; do
+          for m in car_code_reader obd_core dtc_database icons vehicles version updater j1939 obd1 maker_codes recalls service_guides advanced history report; do
             EXCL="$EXCL --exclude-module $m"
           done
           python -m PyInstaller --noconfirm --clean --windowed \
@@ -57,8 +57,15 @@ jobs:
           plutil -replace LSMinimumSystemVersion -string "11.0" "$PL"
           plutil -replace NSBluetoothAlwaysUsageDescription -string "Car Code Reader talks to Bluetooth OBD-II adapters." "$PL"
           plutil -replace NSLocalNetworkUsageDescription -string "Car Code Reader talks to Wi-Fi OBD-II adapters." "$PL"
-          codesign --force --deep -s - "$APP"
-          codesign --verify --deep --strict "$APP"
+          # A valid ad-hoc signature matters on Apple Silicon: an invalid one makes the app get
+          # killed on launch (bounces in the Dock, no prompt) on Macs other than the build machine.
+          # Sign every nested Mach-O deepest-first, then the main binary, then the bundle.
+          xattr -cr "$APP"
+          find "$APP/Contents" -type f \( -name "*.so" -o -name "*.dylib" -o -perm -u+x \) -print0 \
+            | xargs -0 -I{} codesign --force --timestamp=none -s - {} 2>/dev/null || true
+          codesign --force --timestamp=none -s - "$APP/Contents/MacOS/Car Code Reader"
+          codesign --force --timestamp=none -s - "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
 
       - name: Self-test (no Python on the path)
         working-directory: work
@@ -77,6 +84,8 @@ jobs:
           cp -R "dist/Car Code Reader.app" dmg/
           ln -s /Applications dmg/Applications
           cp ../source/mac/Install.txt "dmg/How to install.txt"
+          cp "../source/mac/Open Car Code Reader.command" "dmg/Open Car Code Reader.command"
+          chmod +x "dmg/Open Car Code Reader.command"
           hdiutil create -volname "Car Code Reader" -srcfolder dmg -ov -format UDZO Car-Code-Reader.dmg
           hdiutil verify Car-Code-Reader.dmg
 
