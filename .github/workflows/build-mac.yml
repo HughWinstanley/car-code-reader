@@ -57,15 +57,8 @@ jobs:
           plutil -replace LSMinimumSystemVersion -string "11.0" "$PL"
           plutil -replace NSBluetoothAlwaysUsageDescription -string "Car Code Reader talks to Bluetooth OBD-II adapters." "$PL"
           plutil -replace NSLocalNetworkUsageDescription -string "Car Code Reader talks to Wi-Fi OBD-II adapters." "$PL"
-          # A valid ad-hoc signature matters on Apple Silicon: an invalid one makes the app get
-          # killed on launch (bounces in the Dock, no prompt) on Macs other than the build machine.
-          # Sign every nested Mach-O deepest-first, then the main binary, then the bundle.
-          xattr -cr "$APP"
-          find "$APP/Contents" -type f \( -name "*.so" -o -name "*.dylib" -o -perm -u+x \) -print0 \
-            | xargs -0 -I{} codesign --force --timestamp=none -s - {} 2>/dev/null || true
-          codesign --force --timestamp=none -s - "$APP/Contents/MacOS/Car Code Reader"
-          codesign --force --timestamp=none -s - "$APP"
-          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign --force --deep -s - "$APP"
+          codesign --verify --deep --strict "$APP"
 
       - name: Self-test (no Python on the path)
         working-directory: work
