@@ -57,8 +57,43 @@ jobs:
           plutil -replace LSMinimumSystemVersion -string "11.0" "$PL"
           plutil -replace NSBluetoothAlwaysUsageDescription -string "Car Code Reader talks to Bluetooth OBD-II adapters." "$PL"
           plutil -replace NSLocalNetworkUsageDescription -string "Car Code Reader talks to Wi-Fi OBD-II adapters." "$PL"
-          codesign --force --deep -s - "$APP"
-          codesign --verify --deep --strict "$APP"
+          if [ -n "$MACOS_CERT_P12_BASE64" ]; then
+            echo "Developer ID certificate found — signing and notarizing so it opens on any Mac."
+            # 1. Put the certificate into a temporary keychain
+            KEYCHAIN="$RUNNER_TEMP/ccr.keychain-db"
+            KCPASS="$(uuidgen)"
+            security create-keychain -p "$KCPASS" "$KEYCHAIN"
+            security set-keychain-settings -lut 21600 "$KEYCHAIN"
+            security unlock-keychain -p "$KCPASS" "$KEYCHAIN"
+            echo "$MACOS_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+            security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$MACOS_CERT_PASSWORD" \
+              -T /usr/bin/codesign -T /usr/bin/security
+            security set-key-partition-list -S apple-tool:,apple: -s -k "$KCPASS" "$KEYCHAIN" >/dev/null
+            security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+            IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" | awk -F'"' '/Developer ID Application/{print $2; exit}')"
+            echo "Signing identity: $IDENTITY"
+            # 2. Sign with the hardened runtime + entitlements (required for notarization)
+            codesign --force --deep --options runtime --timestamp \
+              --entitlements ../source/mac/entitlements.plist \
+              --sign "$IDENTITY" "$APP"
+            codesign --verify --deep --strict --verbose=2 "$APP"
+            # 3. Notarize with Apple, then staple the ticket into the app
+            ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/notarize.zip"
+            xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+              --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+            xcrun stapler staple "$APP"
+            echo "NOTARIZED=1" >> "$GITHUB_ENV"
+          else
+            echo "No Developer ID certificate secret set — using ad-hoc signing (opens only with the manual workaround on other Macs)."
+            codesign --force --deep -s - "$APP"
+            codesign --verify --deep --strict "$APP"
+          fi
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
 
       - name: Self-test (no Python on the path)
         working-directory: work
