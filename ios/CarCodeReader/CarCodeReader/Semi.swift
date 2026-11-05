@@ -64,55 +64,52 @@ struct SemiView: View {
     var faults: [J1939Fault] { showExample ? J1939.example : reader.semiFaults }
 
     var body: some View {
-        Group {
-            if !reader.connected && !showExample {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("Reads heavy-duty truck codes over the J1939 network (9-pin port).")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true).padding(.horizontal)
-                        EmptyStateCard(icon: "icon-semi", tint: MacTint.semi, title: "Not connected yet",
-                                       message: "Plug a J1939-capable adapter into the truck's 9-pin port, then connect.")
-                        Button("See an example") { showExample = true }
-                            .buttonStyle(.bordered).padding(.horizontal)
-                    }
-                    .padding(.top, 8)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                PageTitle(title: "Semi trucks",
+                          subtitle: reader.semiStatus.isEmpty
+                              ? "Reads heavy-duty truck codes over the J1939 network (9-pin port)."
+                              : reader.semiStatus,
+                          icon: "icon-semi")
+                if !reader.connected && !showExample {
+                    EmptyStateCard(icon: "icon-semi", title: "Not connected yet",
+                                   message: "Plug a J1939-capable adapter into the truck's 9-pin port, then connect.")
                 }
-            } else {
-                VStack(alignment: .leading, spacing: 0) {
-                    VStack(spacing: 10) {
-                        Text(reader.semiStatus.isEmpty
-                             ? "Reads heavy-duty truck codes over the J1939 network (9-pin port)."
-                             : reader.semiStatus)
-                            .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                        HStack {
-                            if reader.connected {
-                                Button("Read from truck") { showExample = false; reader.readSemi() }
-                                    .buttonStyle(.borderedProminent).disabled(reader.busy)
-                            }
-                            Button(showExample ? "Hide example" : "See an example") { showExample.toggle() }
-                                .buttonStyle(.bordered)
-                        }
+                FlowLayout {
+                    if reader.connected {
+                        Button("Read from truck") { showExample = false; reader.readSemi() }
+                            .buttonStyle(PillStyle(kind: .primary)).disabled(reader.busy)
                     }
-                    .frame(maxWidth: .infinity).padding()
-
-                    List(faults) { f in
-                        VStack(alignment: .leading, spacing: 3) {
-                            HStack {
-                                Text("SPN \(f.spn) · FMI \(f.fmi)").font(.headline)
-                                Spacer()
-                                Text(f.active ? "Active" : "Previous").font(.caption)
-                                    .foregroundStyle(f.active ? .red : .gray)
+                    Button(showExample ? "Hide example" : "See an example") { showExample.toggle() }
+                        .buttonStyle(PillStyle())
+                }
+                ForEach(faults) { f in
+                    RoundCard(radius: 16, padY: 14) {
+                        HStack(alignment: .top, spacing: 10) {
+                            ZStack {
+                                Circle().fill((f.active ? MacColor.red : MacColor.off).opacity(0.22)).frame(width: 16, height: 16)
+                                Circle().fill(f.active ? MacColor.red : MacColor.off).frame(width: 8, height: 8)
                             }
-                            Text(f.title).font(.subheadline)
-                            Text(f.detail).font(.caption).foregroundStyle(.secondary)
+                            .padding(.top, 2)
+                            Text(f.title).font(.system(size: 15, weight: .bold)).foregroundStyle(MacColor.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Spacer(minLength: 4)
+                            StatusPill(words: f.active ? "Active" : "Previous",
+                                       fill: f.active ? MacColor.redSoft : MacColor.offSoft,
+                                       text: f.active ? MacColor.red : MacColor.muted)
                         }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("SPN \(f.spn), FMI \(f.fmi)").font(.system(size: 12)).foregroundStyle(MacColor.muted)
+                            Text(f.detail).font(.system(size: 13)).foregroundStyle(MacColor.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.leading, 26).padding(.top, 3)
                     }
-                    .listStyle(.plain)
                 }
             }
+            .padding(16)
         }
-        .navigationTitle("Semi trucks")
+        .background(Color.white)
         .navigationBarTitleDisplayMode(.inline)
     }
 }

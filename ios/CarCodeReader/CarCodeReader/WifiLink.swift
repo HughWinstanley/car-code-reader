@@ -25,6 +25,10 @@ final class WifiLink: OBDLink {
                 }
             }
             c.start(queue: queue)
+            // Without this, the wrong Wi-Fi network leaves the connection waiting forever.
+            queue.asyncAfter(deadline: .now() + 10) {
+                gate.fire { c.cancel(); cont.resume(throwing: OBDError.noAdapterOnWifi) }
+            }
         }
     }
 
@@ -40,8 +44,14 @@ final class WifiLink: OBDLink {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             let chunk: Data = try await withCheckedThrowingContinuation { cont in
+                let gate = ResumeGate()
                 c.receive(minimumIncompleteLength: 1, maximumLength: 1024) { data, _, _, error in
-                    if let error = error { cont.resume(throwing: error) } else { cont.resume(returning: data ?? Data()) }
+                    gate.fire {
+                        if let error = error { cont.resume(throwing: error) } else { cont.resume(returning: data ?? Data()) }
+                    }
+                }
+                queue.asyncAfter(deadline: .now() + max(0, deadline.timeIntervalSinceNow)) {
+                    gate.fire { cont.resume(returning: Data()) }   // silent adapter: give up at the timeout
                 }
             }
             if let s = String(data: chunk, encoding: .ascii) { reply += s; if reply.contains(">") { break } }

@@ -1,0 +1,4 @@
+{
+  "version": "2.10",
+  "notes": "New design matching the desktop app, real ABS and airbag reading, adapter connection fixes, and a check for updates in Settings."
+}
