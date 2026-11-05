@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "2.10 — Nov 4" }
+enum AppInfo { static let version = "2.11 — Nov 4" }
 enum Tab { case home, problems, live, smog, settings }
 
 extension Color {
@@ -214,26 +214,20 @@ struct StepDot: View {
     }
 }
 
-/// The header strip across the top of the Mac app: logo, name, vehicle and Disconnect.
+/// The strip across the top: the chosen vehicle and Disconnect. Only there when it has something to show.
 struct AppHeader: View {
     @EnvironmentObject var reader: Reader
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 10) {
-                Image("app-logo").resizable().scaledToFit().frame(width: 32, height: 32)
-                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-                Text("Car Code Reader").font(.system(size: 17, weight: .bold)).foregroundStyle(.black)
-                    .lineLimit(1).minimumScaleFactor(0.8)
-                Spacer(minLength: 8)
-                if reader.isDemo {
-                    Button("Exit demo") { reader.exitDemo() }.buttonStyle(PillStyle())
-                } else if reader.connected {
-                    Button("Disconnect") { reader.disconnect() }.buttonStyle(PillStyle())
-                }
-            }
+        HStack(spacing: 10) {
             if !reader.chosenName.isEmpty {
                 Text(reader.chosenName).font(.system(size: 13, weight: .bold)).foregroundStyle(.black)
                     .lineLimit(1).minimumScaleFactor(0.8)
+            }
+            Spacer(minLength: 8)
+            if reader.isDemo {
+                Button("Exit demo") { reader.exitDemo() }.buttonStyle(PillStyle())
+            } else if reader.connected {
+                Button("Disconnect") { reader.disconnect() }.buttonStyle(PillStyle())
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
@@ -243,12 +237,15 @@ struct AppHeader: View {
 
 /// One tab's page: the header strip and hairline, then the content on white paper.
 struct MacPage<Content: View>: View {
+    @EnvironmentObject var reader: Reader
     @ViewBuilder let content: Content
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                AppHeader()
-                Rectangle().fill(MacColor.line).frame(height: 1)
+                if reader.connected || reader.isDemo || !reader.chosenName.isEmpty {
+                    AppHeader()
+                    Rectangle().fill(MacColor.line).frame(height: 1)
+                }
                 content.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .background(Color.white)
@@ -389,9 +386,7 @@ struct HomeTab: View {
         MacPage {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("What do you want to check?").font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(MacColor.ink)
-                    vehicleBlock.padding(.top, 10).padding(.bottom, 18)
+                    if reader.isDemo || !reader.chosenName.isEmpty { vehicleBlock.padding(.bottom, 18) }
 
                     // Order matches the Mac app's home screen.
                     Grid(horizontalSpacing: 12, verticalSpacing: 12) {

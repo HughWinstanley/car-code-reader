@@ -1,4 +1,4 @@
 {
-  "version": "2.10",
-  "notes": "New design matching the desktop app, real ABS and airbag reading, adapter connection fixes, and a check for updates in Settings."
+  "version": "2.11",
+  "notes": "Cleaner top of the screen: the title, logo and Home heading are gone."
 }
