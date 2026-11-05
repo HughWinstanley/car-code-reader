@@ -914,7 +914,7 @@ class App:
         self.update_bar_card = RoundPanel(page, pad=(18, 12), fill=C["amber_soft"], outline=C["amber_soft"])
         self.update_bar = self.update_bar_card.inner
         self.home_vehicle = tk.Frame(page, bg=C["page"])
-        self.home_vehicle.pack(fill="x", pady=(10, 18))
+        self.home_vehicle.pack(fill="x")
         s = 64
         tint = TINT
 
@@ -962,11 +962,7 @@ class App:
             tk.Label(row, text=vehicles.support_text(ch["make"], ch["year"]) + ".", bg=C["page"], fg=C["muted"],
                      font=F(13)).pack(side="left")
             LinkLabel(row, "Change", self.open_picker).pack(side="left", padx=10)
-        else:
-            tk.Label(box, text="Pick your vehicle first if you like. It helps older vehicles that don't report "
-                               "their make, and the app reads codes either way.", bg=C["page"], fg=C["muted"],
-                     font=F(13), anchor="w", justify="left", wraplength=640).pack(side="left")
-            LinkLabel(box, "Choose vehicle", self.open_picker).pack(side="left", padx=10)
+        box.pack_configure(pady=(0, 18) if ch else 0)  # nothing to show until a vehicle is picked
 
     def open_live_connect(self):
         """Connect from the Live data page, then start the readings."""

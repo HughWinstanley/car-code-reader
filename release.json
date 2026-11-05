@@ -1,8 +1,8 @@
 {
-  "version": "2.32",
-  "notes": "Cleaner top of the window: the title, logo and Home heading are gone.",
+  "version": "2.33",
+  "notes": "Cleaner Home page: the tiles now start at the top.",
   "files": {
-    "car_code_reader.py": "af73cb862d5ddbccdda57c744c09fabed2fd0872bac02d784f4cdfb6da8a93fd",
+    "car_code_reader.py": "3811334c28691f4638a4311b08833641771070714291f55b71b65a308de89482",
     "obd_core.py": "4ee256565c8dd0cf9ef5b170a5390d2cbea0b1933b575309df17f5be56c2bd66",
     "dtc_database.py": "c2602d0123c271a96253dcac398ee67c2d0e4ed4366c91b13c7efe14557ec161",
     "icons.py": "ee6ab531fcf7008f0c40b5612eb419db8fd9ab755b8d2feceeaa7335f6d48175",
