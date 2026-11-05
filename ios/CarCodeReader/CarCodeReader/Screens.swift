@@ -171,8 +171,8 @@ struct VehiclePickerSheet: View {
             .scrollDismissesKeyboard(.interactively)
         }
         .padding(16)
-        .background(Color.white)
-        .tint(.black)
+        .background(MacColor.page)
+        .tint(MacColor.ink)
     }
 }
 

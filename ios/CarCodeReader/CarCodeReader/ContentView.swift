@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "2.11 — Nov 4" }
+enum AppInfo { static let version = "2.12 — Nov 5" }
 enum Tab { case home, problems, live, smog, settings }
 
 extension Color {
@@ -27,22 +27,47 @@ enum MacTint {
     static let old     = Color(hex: "#7A5A2E")
 }
 
-/// The Mac app's palette (car_code_reader.py C): white paper, black ink, colour only for status.
+extension Color {
+    /// A colour that follows the app's light or dark appearance.
+    init(light: String, dark: String) {
+        let (l, d) = (UIColor(Color(hex: light)), UIColor(Color(hex: dark)))
+        self = Color(UIColor { $0.userInterfaceStyle == .dark ? d : l })
+    }
+}
+
+/// The Mac app's palette (car_code_reader.py C): paper and ink, colour only for status.
 enum MacColor {
-    static let ink       = Color.black
-    static let muted     = Color(hex: "#6B6B6B")
-    static let line      = Color(hex: "#E2E2E2")
-    static let raised    = Color(hex: "#F3F3F3")
+    static let page      = Color(light: "#FFFFFF", dark: "#000000")
+    static let panel     = Color(light: "#FFFFFF", dark: "#1C1C1E")
+    static let ink       = Color(light: "#000000", dark: "#FFFFFF")
+    static let muted     = Color(light: "#6B6B6B", dark: "#A1A1A6")
+    static let line      = Color(light: "#E2E2E2", dark: "#38383A")
+    static let raised    = Color(light: "#F3F3F3", dark: "#2C2C2E")
+    static let pressed   = Color(light: "#2A2A2A", dark: "#D1D1D6")
     static let amber     = Color(hex: "#E39A12")
-    static let amberInk  = Color(hex: "#8A5A00")
-    static let amberSoft = Color(hex: "#FFF3DC")
-    static let red       = Color(hex: "#D9362B")
-    static let redSoft   = Color(hex: "#FDE6E4")
-    static let green     = Color(hex: "#1E8A4A")
-    static let greenSoft = Color(hex: "#E2F3E8")
-    static let blueSoft  = Color(hex: "#EFEFEF")
-    static let off       = Color(hex: "#A3A3A3")
-    static let offSoft   = Color(hex: "#F1F1F1")
+    static let amberInk  = Color(light: "#8A5A00", dark: "#F5B942")
+    static let amberSoft = Color(light: "#FFF3DC", dark: "#3A2A0B")
+    static let red       = Color(light: "#D9362B", dark: "#FF6259")
+    static let redSoft   = Color(light: "#FDE6E4", dark: "#401815")
+    static let green     = Color(light: "#1E8A4A", dark: "#3DCB6C")
+    static let greenSoft = Color(light: "#E2F3E8", dark: "#12331F")
+    static let blueSoft  = Color(light: "#EFEFEF", dark: "#2C2C2E")
+    static let off       = Color(light: "#A3A3A3", dark: "#8E8E93")
+    static let offSoft   = Color(light: "#F1F1F1", dark: "#2C2C2E")
+}
+
+/// The Settings choice: follow the iPhone, or always light or dark.
+enum Appearance: String, CaseIterable, Identifiable {
+    case automatic, light, dark
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
+    var scheme: ColorScheme? {
+        switch self {
+        case .automatic: return nil
+        case .light:     return .light
+        case .dark:      return .dark
+        }
+    }
 }
 
 /// Urgency -> dot colour, pill colours and words (the Mac app's LEVELS).
@@ -79,9 +104,9 @@ struct PillStyle: ButtonStyle {
             (fill, text, outline) = (MacColor.offSoft, MacColor.off, MacColor.line)
         } else {
             switch kind {
-            case .primary:   (fill, text, outline) = (down ? Color(hex: "#2A2A2A") : .black, .white, .black)
-            case .secondary: (fill, text, outline) = (down ? MacColor.raised : .white, .black, .black)
-            case .danger:    (fill, text, outline) = (down ? MacColor.redSoft : .white, MacColor.red, MacColor.red)
+            case .primary:   (fill, text, outline) = (down ? MacColor.pressed : MacColor.ink, MacColor.page, MacColor.ink)
+            case .secondary: (fill, text, outline) = (down ? MacColor.raised : MacColor.panel, MacColor.ink, MacColor.ink)
+            case .danger:    (fill, text, outline) = (down ? MacColor.redSoft : MacColor.panel, MacColor.red, MacColor.red)
             }
         }
         return configuration.label
@@ -123,7 +148,7 @@ struct LinkLabel: View {
 /// The Mac app's RoundPanel: a white rounded card with a thin grey edge.
 struct RoundCard<Content: View>: View {
     var radius: CGFloat = 18
-    var fill: Color = .white
+    var fill: Color = MacColor.panel
     var outline: Color = MacColor.line
     var padX: CGFloat = 18
     var padY: CGFloat = 14
@@ -202,8 +227,8 @@ struct PageTitle: View {
 /// A number in a circle, used for how-to steps.
 struct StepDot: View {
     let number: Int
-    var fill: Color = .black
-    var text: Color = .white
+    var fill: Color = MacColor.ink
+    var text: Color = MacColor.page
     var size: CGFloat = 26
     var body: some View {
         ZStack {
@@ -220,7 +245,7 @@ struct AppHeader: View {
     var body: some View {
         HStack(spacing: 10) {
             if !reader.chosenName.isEmpty {
-                Text(reader.chosenName).font(.system(size: 13, weight: .bold)).foregroundStyle(.black)
+                Text(reader.chosenName).font(.system(size: 13, weight: .bold)).foregroundStyle(MacColor.ink)
                     .lineLimit(1).minimumScaleFactor(0.8)
             }
             Spacer(minLength: 8)
@@ -231,7 +256,7 @@ struct AppHeader: View {
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
-        .background(Color.white)
+        .background(MacColor.page)
     }
 }
 
@@ -248,10 +273,10 @@ struct MacPage<Content: View>: View {
                 }
                 content.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .background(Color.white)
+            .background(MacColor.page)
             .toolbar(.hidden, for: .navigationBar)
         }
-        .tint(.black)
+        .tint(MacColor.ink)
     }
 }
 
@@ -272,7 +297,7 @@ struct TileCard<Art: View>: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.horizontal, 10).padding(.vertical, 14)
-        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color.white))
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(MacColor.panel))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(MacColor.line, lineWidth: 1))
         .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
@@ -351,6 +376,7 @@ struct BusyLine: View {
 struct ContentView: View {
     @EnvironmentObject var reader: Reader
     @State private var selection: Tab = .home
+    @AppStorage("appearance") private var appearance: Appearance = .automatic
     var body: some View {
         TabView(selection: $selection) {
             HomeTab(selection: $selection).tabItem { Label("Home", systemImage: "house") }.tag(Tab.home)
@@ -359,7 +385,7 @@ struct ContentView: View {
             SmogTab().tabItem { Label("Smog", image: "tab-smog") }.tag(Tab.smog)
             SettingsTab().tabItem { Label("Settings", systemImage: "gearshape") }.tag(Tab.settings)
         }
-        .preferredColorScheme(.light)   // the Mac app is always white paper, black ink
+        .preferredColorScheme(appearance.scheme)
     }
 }
 
@@ -467,7 +493,7 @@ struct Lamp: View {
 
     private var core: Color {
         switch mode {
-        case .off, .busy: return .black
+        case .off, .busy: return MacColor.ink
         case .ok: return MacColor.green
         case .warn: return MacColor.amber
         case .bad: return MacColor.red
@@ -507,7 +533,8 @@ struct Lamp: View {
             Ellipse().fill(Color.white.opacity(0.25))
                 .frame(width: size * 0.44, height: size * 0.28)
                 .offset(y: -size * 0.13)
-            Text(glyph).font(.system(size: size * 0.28, weight: .bold)).foregroundStyle(.white)
+            Text(glyph).font(.system(size: size * 0.28, weight: .bold))
+                .foregroundStyle(mode == .busy ? MacColor.page : .white)
         }
     }
 }
@@ -558,7 +585,7 @@ struct ProblemCard: View {
                     Text("How to check it").font(.system(size: 13, weight: .bold)).foregroundStyle(MacColor.ink)
                     ForEach(Array(steps.enumerated()), id: \.offset) { i, s in
                         HStack(alignment: .top, spacing: 10) {
-                            StepDot(number: i + 1, fill: MacTint.vehicle.opacity(0.15), text: MacTint.vehicle)
+                            StepDot(number: i + 1, fill: MacTint.vehicle.opacity(0.15), text: Color(light: "#1F6FD1", dark: "#7DB3F2"))
                             Text(s).font(.system(size: 13)).foregroundStyle(MacColor.ink)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -853,7 +880,7 @@ struct LiveTab: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.horizontal, 16).padding(.vertical, 14)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Color.white))
+        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(MacColor.panel))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(MacColor.line, lineWidth: 1))
     }
 }
@@ -974,6 +1001,7 @@ struct SettingsTab: View {
     @State private var checking = false
     @State private var updateMessage = ""
     @State private var available: UpdateCheck.Release? = nil
+    @AppStorage("appearance") private var appearance: Appearance = .automatic
 
     private func checkForUpdates() {
         checking = true
@@ -1042,7 +1070,18 @@ struct SettingsTab: View {
         MacPage {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    PageTitle(title: "Settings", subtitle: "How the app reaches your adapter.")
+                    PageTitle(title: "Settings", subtitle: "How the app looks and reaches your adapter.")
+
+                    RoundCard(padX: 20, padY: 16) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            heading("Appearance")
+                            Picker("Appearance", selection: $appearance) {
+                                ForEach(Appearance.allCases) { Text($0.title).tag($0) }
+                            }
+                            .pickerStyle(.segmented)
+                            note("Automatic follows your iPhone's light or dark setting.")
+                        }
+                    }
 
                     RoundCard(padX: 20, padY: 16) {
                         VStack(alignment: .leading, spacing: 10) {

@@ -54,7 +54,7 @@ struct OBD1View: View {
             }
             .padding(16)
         }
-        .background(Color.white)
+        .background(MacColor.page)
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -116,7 +116,7 @@ struct OBD1GuideView: View {
             .padding(16)
         }
         .scrollDismissesKeyboard(.interactively)
-        .background(Color.white)
+        .background(MacColor.page)
         .navigationBarTitleDisplayMode(.inline)
     }
 

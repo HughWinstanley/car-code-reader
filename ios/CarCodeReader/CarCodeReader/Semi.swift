@@ -109,7 +109,7 @@ struct SemiView: View {
             }
             .padding(16)
         }
-        .background(Color.white)
+        .background(MacColor.page)
         .navigationBarTitleDisplayMode(.inline)
     }
 }
