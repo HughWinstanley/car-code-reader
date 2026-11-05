@@ -786,19 +786,14 @@ class App:
 
     # --- layout --------------------------------------------------------------------------
     def _build(self):
-        head = tk.Frame(self.root, bg=C["header"], padx=20, pady=14)
-        head.pack(fill="x")
-        tk.Frame(self.root, bg=C["line"], height=1).pack(fill="x")
-
-        logo = tk.Canvas(head, width=36, height=36, bg=C["header"], highlightthickness=0)
-        logo.pack(side="left", padx=(0, 10))
-        icons.app_logo(logo, 18, 18, 34)  # drawn, not a shrunken picture, so it stays sharp
-        tk.Label(head, text=APP_NAME, bg=C["header"], fg=C["ink"], font=F(17, "bold")).pack(side="left")
+        # The strip across the top only shows when there's a vehicle or a Disconnect button to put in it.
+        head = self.head = tk.Frame(self.root, bg=C["header"], padx=20, pady=14)
+        self.head_rule = tk.Frame(self.root, bg=C["line"], height=1)
         self.disconnect_btn = PillButton(head, "Disconnect", self.disconnect, kind="onheader")
         self.vehicle_lbl = tk.Label(head, text="", bg=C["header"], fg=C["ink"], font=F(13, "bold"))
         self.vehicle_lbl.pack(side="right", padx=(0, 12))
 
-        body = tk.Frame(self.root, bg=C["page"])
+        body = self.body = tk.Frame(self.root, bg=C["page"])
         body.pack(fill="both", expand=True)
         side = tk.Frame(body, bg=C["side"], width=200, pady=18)
         side.pack(side="left", fill="y")
@@ -827,6 +822,15 @@ class App:
             "History": self._build_history(),
             "Help": self._build_help(),
         }
+
+    def _refresh_header(self):
+        if self.elm or self.vehicle_lbl["text"]:
+            if not self.head.winfo_manager():
+                self.head.pack(fill="x", before=self.body)
+                self.head_rule.pack(fill="x", before=self.body)
+        elif self.head.winfo_manager():
+            self.head.pack_forget()
+            self.head_rule.pack_forget()
 
     def show_page(self, name):
         if name == "Home":
@@ -907,7 +911,6 @@ class App:
     # --- Home page ---------------------------------------------------------------------------
     def _build_home(self):
         page = tk.Frame(self.main, bg=C["page"])
-        self._page_title(page, "What do you want to check?")
         self.update_bar_card = RoundPanel(page, pad=(18, 12), fill=C["amber_soft"], outline=C["amber_soft"])
         self.update_bar = self.update_bar_card.inner
         self.home_vehicle = tk.Frame(page, bg=C["page"])
@@ -1320,6 +1323,7 @@ class App:
             self.elm.make = ch["family"]
         name = f"{ch['year']} {ch['make']} {ch['model']}".strip()
         self.vehicle_lbl.configure(text=name)
+        self._refresh_header()
         if self.vehicle:
             if self.vehicle.get("year", "-") == "-":
                 self.vehicle["year"] = str(ch["year"])
@@ -1544,6 +1548,7 @@ class App:
         else:
             self.disconnect_btn.pack_forget()
         self.disconnect_btn.set_enabled(not self.busy or self.live_running)
+        self._refresh_header()
         for b in getattr(self, "page_buttons", []):
             b.set_enabled(idle)
         if hasattr(self, "live_btn"):
@@ -1618,6 +1623,7 @@ class App:
         self.elm = None
         self.vehicle, self.items, self.modules, self.readiness, self.scanned = {}, [], [], None, False
         self.vehicle_lbl.configure(text="")
+        self._refresh_header()
         self._show_info({})
         self.refresh_problems()
         self.refresh_smog()
@@ -2318,6 +2324,7 @@ class App:
         for k, var in self.info_vars.items():
             var.set(shown.get(k, "-"))
         self.vehicle_lbl.configure(text=info.get("title", ""))
+        self._refresh_header()
 
     def refresh_info(self):
         self.run_bg(lambda: self._gather_info(self.elm), self._show_info, "Reading vehicle info…")
