@@ -285,3 +285,57 @@ class TripMeter:
     @property
     def average_mpg(self):
         return self.miles / self.gallons if self.gallons else None
+
+
+# --- Freeze frame in plain English --------------------------------------------------------------
+def freeze_notes(rows):
+    """Clues from a freeze frame's readings, as sentences. rows: [(name, formatted value), ...]"""
+    import re
+    table = dict(rows)
+
+    def num(name):
+        text = table.get(name) or ""
+        m = re.search(r"(-?[0-9]+(?:\.[0-9]+)?)\s*°C", text) or re.search(r"(-?[0-9]+(?:\.[0-9]+)?)", text)
+        return float(m.group(1)) if m else None
+
+    def first(name):
+        m = re.search(r"-?[0-9]+", table.get(name) or "")
+        return int(m.group(0)) if m else None
+
+    notes = []
+    rpm, speed, coolant, load = num("Engine RPM"), first("Vehicle speed"), num("Coolant temperature"), num("Engine load")
+    if rpm is not None and rpm < 50:
+        notes.append("The engine wasn't running when this was saved.")
+    elif rpm is not None and speed:
+        notes.append(f"The vehicle was moving at {speed} mph with the engine at {rpm:.0f} rpm.")
+    elif rpm is not None and speed == 0:
+        notes.append("The engine was idling with the vehicle stopped." if rpm < 1500
+                     else f"The vehicle was stopped with the engine revving at {rpm:.0f} rpm.")
+    if load is not None and load >= 80:
+        notes.append(f"The engine was working hard ({load:.0f}% load), so think about problems that show up under "
+                     "power, like weak spark or low fuel pressure.")
+    cold = coolant is not None and coolant < 60
+    if cold:
+        notes.append("The engine was still cold, so think about problems that only show up before it warms up.")
+    elif coolant is not None and coolant >= 112:
+        notes.append("The engine was running hot, so check the coolant level and cooling system first.")
+    elif coolant is not None and coolant >= 75:
+        notes.append("The engine was fully warmed up.")
+    trims = []
+    for bank in (1, 2):
+        short, long_ = num(f"Short-term fuel trim (bank {bank})"), num(f"Long-term fuel trim (bank {bank})")
+        if short is not None or long_ is not None:
+            trims.append((bank, (short or 0) + (long_ or 0)))
+    for bank, total in trims:
+        if total >= 10:
+            notes.append(f"Fuel trim on bank {bank} was {total:+.0f}%. The computer was adding fuel, which usually "
+                         "means too much air or too little fuel, like a vacuum leak, dirty air flow sensor or weak "
+                         "fuel pump.")
+        elif total <= -10:
+            notes.append(f"Fuel trim on bank {bank} was {total:+.0f}%. The computer was taking fuel away, which "
+                         "usually means too much fuel, like a leaking injector or high fuel pressure.")
+    if rpm is not None and rpm < 50:  # trims mean nothing with the engine off
+        return [n for n in notes if not n.startswith("Fuel trim")]
+    if trims and not cold and all(abs(t) < 10 for _b, t in trims):
+        notes.append("Fuel trims looked normal, so a fuel mixture problem is less likely.")
+    return notes

@@ -299,7 +299,8 @@ extension Reader {
     func readFreezeFrame() {
         if isDemo {
             freezeFrame = [("Code that saved this snapshot", "P0301"), ("Engine RPM", "2140 rpm"), ("Vehicle speed", "41 mph  (66 km/h)"),
-                           ("Coolant temperature", "194 °F  (90 °C)"), ("Engine load", "62.0 %")]
+                           ("Coolant temperature", "194 °F  (90 °C)"), ("Engine load", "62.0 %"),
+                           ("Short-term fuel trim (bank 1)", "2.3 %"), ("Long-term fuel trim (bank 1)", "11.7 %")]
             freezeFrameRead = true
             return
         }
@@ -1437,5 +1438,82 @@ struct LiveGraphCard: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Tire pressure and freeze frame clues (the Mac app's tire_status and freeze_notes)
+
+extension CodeDetail {
+    static let tireModule = "Tire pressure (TPMS)"
+
+    /// Tire pressure systems have no address of their own to ask, so go by the code and what it means.
+    static func isTireCode(_ code: String, meaning: String) -> Bool {
+        let low = meaning.lowercased()
+        let base = code.split(separator: "-").first.map { String($0).uppercased() } ?? ""
+        return ["C0750", "C0755", "C0760", "C0765", "C0775"].contains(base) || low.contains("tire pressure") || low.contains("tpms")
+    }
+
+    /// One line for the results page. It only says "no codes" when something that could hold them answered.
+    static func tireStatus(codes: Int, moduleNames: [String], canReachModules: Bool) -> String {
+        if codes > 0 { return "Tire pressure (TPMS): \(codes) code\(codes == 1 ? "" : "s") found, listed with the problems." }
+        if moduleNames.contains(where: { $0.lowercased().contains("body") }) {
+            return "Tire pressure (TPMS): no codes in the body module, which is where many vehicles keep them."
+        }
+        if canReachModules { return "Tire pressure (TPMS): not checked. The body module, where many vehicles keep it, didn't answer." }
+        return "Tire pressure (TPMS): not checked. This vehicle's protocol doesn't let us reach it."
+    }
+
+    /// Clues from a freeze frame's readings, as sentences.
+    static func freezeNotes(_ rows: [(String, String)]) -> [String] {
+        func text(_ name: String) -> String { rows.first { $0.0 == name }?.1 ?? "" }
+        func match(_ pattern: String, _ s: String) -> Double? {
+            s.range(of: pattern, options: .regularExpression).flatMap { Double(s[$0]) }
+        }
+        func num(_ name: String) -> Double? {
+            let s = text(name)
+            return match("-?[0-9]+(\\.[0-9]+)?(?=\\s*°C)", s) ?? match("-?[0-9]+(\\.[0-9]+)?", s)
+        }
+        let rpm = num("Engine RPM"), coolant = num("Coolant temperature"), load = num("Engine load")
+        let speed = match("-?[0-9]+", text("Vehicle speed")).map { Int($0) }
+        var notes: [String] = []
+        if let rpm {
+            if rpm < 50 {
+                notes.append("The engine wasn't running when this was saved.")
+            } else if let speed, speed > 0 {
+                notes.append("The vehicle was moving at \(speed) mph with the engine at \(Int(rpm.rounded())) rpm.")
+            } else if speed == 0 {
+                notes.append(rpm < 1500 ? "The engine was idling with the vehicle stopped."
+                                        : "The vehicle was stopped with the engine revving at \(Int(rpm.rounded())) rpm.")
+            }
+        }
+        if let load, load >= 80 {
+            notes.append("The engine was working hard (\(Int(load.rounded()))% load), so think about problems that show up under power, like weak spark or low fuel pressure.")
+        }
+        let cold = (coolant ?? 100) < 60
+        if cold {
+            notes.append("The engine was still cold, so think about problems that only show up before it warms up.")
+        } else if let coolant, coolant >= 112 {
+            notes.append("The engine was running hot, so check the coolant level and cooling system first.")
+        } else if let coolant, coolant >= 75 {
+            notes.append("The engine was fully warmed up.")
+        }
+        var trims: [(Int, Double)] = []
+        for bank in [1, 2] {
+            let short = num("Short-term fuel trim (bank \(bank))"), long = num("Long-term fuel trim (bank \(bank))")
+            if short != nil || long != nil { trims.append((bank, (short ?? 0) + (long ?? 0))) }
+        }
+        if let rpm, rpm < 50 { return notes }   // trims mean nothing with the engine off
+        for (bank, total) in trims {
+            let shown = String(format: "%+.0f", total)
+            if total >= 10 {
+                notes.append("Fuel trim on bank \(bank) was \(shown)%. The computer was adding fuel, which usually means too much air or too little fuel, like a vacuum leak, dirty air flow sensor or weak fuel pump.")
+            } else if total <= -10 {
+                notes.append("Fuel trim on bank \(bank) was \(shown)%. The computer was taking fuel away, which usually means too much fuel, like a leaking injector or high fuel pressure.")
+            }
+        }
+        if !trims.isEmpty && !cold && trims.allSatisfy({ abs($0.1) < 10 }) {
+            notes.append("Fuel trims looked normal, so a fuel mixture problem is less likely.")
+        }
+        return notes
     }
 }

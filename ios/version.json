@@ -1,4 +1,4 @@
 {
-  "version": "2.18",
-  "notes": "Looking up a code on Tests now shows the fix steps and repair videos, and Service has popular repairs and common codes one tap away. The Home boxes also fill the screen."
+  "version": "2.19",
+  "notes": "Freeze frame now explains what its numbers mean, and Full scan shows a tire pressure (TPMS) line."
 }

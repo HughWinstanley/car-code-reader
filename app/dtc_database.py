@@ -601,3 +601,31 @@ def why_it_matters(code, status="", module=""):
         return ("Modules aren't talking to each other properly. That can cause odd warning lights or features "
                 "that stop working.")
     return "This can affect how the vehicle runs or its emissions. Have it looked at when you can."
+
+
+# --- Tire pressure (TPMS) ---------------------------------------------------------------------
+TIRE_MODULE = "Tire pressure (TPMS)"
+GENERIC.update({
+    "C0750": "Tire pressure sensor signal problem (GM: left front wheel)",
+    "C0755": "Tire pressure sensor signal problem (GM: right front wheel)",
+    "C0760": "Tire pressure sensor signal problem (GM: a rear wheel)",
+    "C0765": "Tire pressure sensor signal problem (GM: a rear wheel)",
+    "C0775": "Tire pressure sensors not learned to their wheel positions",
+})
+
+
+def is_tire_code(code, description=""):
+    """Tire pressure systems have no address of their own to ask, so go by the code and what it means."""
+    low = description.lower()
+    return code.split("-")[0].upper() in ("C0750", "C0755", "C0760", "C0765", "C0775") or "tire pressure" in low or "tpms" in low
+
+
+def tire_status(tire_codes, module_names, can_reach_modules):
+    """One line for the results page. It only says 'no codes' when something that could hold them answered."""
+    if tire_codes:
+        return f"Tire pressure (TPMS): {tire_codes} code{'' if tire_codes == 1 else 's'} found, listed with the problems."
+    if any("body" in n.lower() for n in module_names):
+        return "Tire pressure (TPMS): no codes in the body module, which is where many vehicles keep them."
+    if can_reach_modules:
+        return "Tire pressure (TPMS): not checked. The body module, where many vehicles keep it, didn't answer."
+    return "Tire pressure (TPMS): not checked. This vehicle's protocol doesn't let us reach it."

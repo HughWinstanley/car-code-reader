@@ -2,6 +2,11 @@
 enum CodeData {
     // generic
     static let generic: [String: String] = [
+        "C0750": "Tire pressure sensor signal problem (GM: left front wheel)",
+        "C0755": "Tire pressure sensor signal problem (GM: right front wheel)",
+        "C0760": "Tire pressure sensor signal problem (GM: a rear wheel)",
+        "C0765": "Tire pressure sensor signal problem (GM: a rear wheel)",
+        "C0775": "Tire pressure sensors not learned to their wheel positions",
         "B0001": "Driver frontal airbag stage 1 deployment control",
         "B0002": "Driver frontal airbag stage 2 deployment control",
         "C0035": "Left front wheel speed sensor circuit",

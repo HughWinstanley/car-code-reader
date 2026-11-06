@@ -909,6 +909,10 @@ struct ProblemsTab: View {
             }
             .scaledFont(12).foregroundStyle(MacColor.muted)
             .fixedSize(horizontal: false, vertical: true)
+            Text(CodeDetail.tireStatus(codes: reader.problems.filter { $0.module == CodeDetail.tireModule }.count,
+                                       moduleNames: reader.moduleNames, canReachModules: reader.canScanModules))
+                .scaledFont(12).foregroundStyle(MacColor.muted)
+                .fixedSize(horizontal: false, vertical: true)
             if reader.canScanModules {
                 Text("Missing a module, like ABS or airbag? A deep scan checks every address and takes 1 to 3 minutes.")
                     .scaledFont(12).foregroundStyle(MacColor.muted)
@@ -1009,6 +1013,15 @@ struct LiveTab: View {
                             Spacer(minLength: 8)
                             Text(row.1).scaledFont(13, weight: .bold).foregroundStyle(MacColor.ink)
                         }
+                    }
+                    let notes = CodeDetail.freezeNotes(reader.freezeFrame)
+                    if !notes.isEmpty {
+                        Text("What this tells you").scaledFont(14, weight: .bold).foregroundStyle(MacColor.ink).padding(.top, 8)
+                        ForEach(notes, id: \.self) { note in
+                            Text(note).scaledFont(13).foregroundStyle(MacColor.ink)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Text("These are clues to narrow it down, not a diagnosis.").scaledFont(12).foregroundStyle(MacColor.muted)
                     }
                 }
             }

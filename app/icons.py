@@ -307,9 +307,12 @@ def _rbox(cv, x0, y0, x1, y1, r, fill):
 def _stroke(cv, c, w, *points):
     """A line with round ends and round joins."""
     cv.create_line(*points, fill=c, width=w, capstyle="round", joinstyle="round")
-    pts = list(zip(points[0::2], points[1::2]))
-    for x, y in pts:
-        cv.create_oval(x - w / 2, y - w / 2, x + w / 2, y + w / 2, fill=c, outline="")
+
+
+def _bar(cv, x, y, half_w, half_h, c):
+    """A straight bar on whole pixels. The Tk canvas snaps each corner separately, so this keeps both sides even."""
+    x, y, half_w, half_h = round(x), round(y), max(1, round(half_w)), max(1, round(half_h))
+    cv.create_rectangle(x - half_w, y - half_h, x + half_w, y + half_h, fill=c, outline="")
 
 
 def _battery(cv, cx, cy, s, c):
@@ -319,9 +322,11 @@ def _battery(cv, cx, cy, s, c):
     _rbox(cv, cx - 3.5 * u, cy - 3.5 * u, cx - 1.5 * u, cy - 2 * u, 0.4 * u, c)
     _rbox(cv, cx + 1.5 * u, cy - 3.5 * u, cx + 3.5 * u, cy - 2 * u, 0.4 * u, c)
     hole = _hole(cv)
-    _stroke(cv, hole, w, cx - 3 * u, cy + 0.4 * u, cx - 1 * u, cy + 0.4 * u)
-    _stroke(cv, hole, w, cx + 1 * u, cy + 0.4 * u, cx + 3 * u, cy + 0.4 * u)
-    _stroke(cv, hole, w, cx + 2 * u, cy - 0.6 * u, cx + 2 * u, cy + 1.4 * u)
+    y = cy + 0.4 * u
+    t, arm = w / 2, 1.05 * u
+    _bar(cv, cx - 2.1 * u, y, arm, t, hole)   # minus
+    _bar(cv, cx + 2.1 * u, y, arm, t, hole)   # plus
+    _bar(cv, cx + 2.1 * u, y, t, arm, hole)
 
 
 def _gear(cv, cx, cy, s, c):
@@ -338,7 +343,7 @@ def _folder(cv, cx, cy, s, c):
     u = s / 10
     _rbox(cv, cx - 4.4 * u, cy - 3.4 * u, cx - 0.2 * u, cy, 0.7 * u, c)
     _rbox(cv, cx - 4.4 * u, cy - 2.4 * u, cx + 4.4 * u, cy + 3.4 * u, 0.7 * u, c)
-    _stroke(cv, blend(c, "#FFFFFF", 0.65), max(1, s / 24), cx - 3.6 * u, cy - 1.5 * u, cx + 3.6 * u, cy - 1.5 * u)
+    _bar(cv, cx, cy - 1.5 * u, 3.6 * u, max(1, s / 48), blend(c, "#FFFFFF", 0.65))
 
 
 def _download(cv, cx, cy, s, c):
@@ -355,8 +360,8 @@ def _tools(cv, cx, cy, s, c):
     """A wrench crossed over a screwdriver."""
     u = s / 10
     hole = _hole(cv)
-    _stroke(cv, c, max(2, s / 12), cx - 3.7 * u, cy - 3.7 * u, cx + 0.8 * u, cy + 0.8 * u)  # blade
-    _stroke(cv, c, max(4, s / 4.6), cx + 1.9 * u, cy + 1.9 * u, cx + 3.5 * u, cy + 3.5 * u)  # handle
+    _stroke(cv, c, max(2, s / 12), cx - 3.7 * u, cy - 3.7 * u, cx + 1.4 * u, cy + 1.4 * u)  # blade
+    _stroke(cv, c, max(4, s / 4.6), cx + 1.6 * u, cy + 1.6 * u, cx + 3.5 * u, cy + 3.5 * u)  # handle
     _stroke(cv, hole, max(4, s / 4.4), cx - 2.8 * u, cy + 2.8 * u, cx + 1.8 * u, cy - 1.8 * u)  # gap where they cross
     _stroke(cv, c, max(3, s / 6.5), cx - 3.2 * u, cy + 3.2 * u, cx + 1.8 * u, cy - 1.8 * u)  # wrench
     hx, hy, r = cx + 2.5 * u, cy - 2.5 * u, 2 * u

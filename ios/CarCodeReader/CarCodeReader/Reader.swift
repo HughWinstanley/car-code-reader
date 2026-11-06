@@ -281,7 +281,8 @@ final class Reader: ObservableObject {
     private func applyScan(obd: [Dtc], modules: [ScannedModule]) {
         var merged: [Problem] = []
         func add(_ d: Dtc) {
-            let module = Reader.friendlyModule(d.module)
+            var module = Reader.friendlyModule(d.module)
+            if CodeDetail.isTireCode(d.code, meaning: DTC.describe(d.code, make: make).0) { module = CodeDetail.tireModule }
             let base = d.code.split(separator: "-").first.map(String.init) ?? d.code
             if let at = merged.firstIndex(where: { $0.module == module && $0.code.split(separator: "-").first.map(String.init) == base }) {
                 let it = merged[at]
@@ -416,6 +417,7 @@ final class Reader: ObservableObject {
             ("P0301", "Pending", "Engine"), ("P0171", "Stored", "Engine"), ("P0420", "Stored", "Engine"),
             ("P0455", "History", "Engine"),
             ("C0035-1C", "Active now, Stored", "ABS and brakes"), ("B0001-13", "Stored", "Airbag"),
+            ("C0750", "Stored", CodeDetail.tireModule),
         ]
         applyDemoScan()
 

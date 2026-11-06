@@ -28,6 +28,7 @@ from tkinter.scrolledtext import ScrolledText
 from obd_core import (CONN_SERIAL, CONN_WIFI, CONN_DEMO, CONN_DEMO_OLD, CONN_DEMO_SEMI, ECU_NAMES, MS, PIDS,
                       EXTENDED, decode_readiness, format_pid, format_value, list_ports, make_from_vin, open_adapter, us_value,
                       year_from_vin)
+from dtc_database import TIRE_MODULE, is_tire_code, tire_status
 from dtc_database import (clean_code, decode_dtc_bytes, describe_dtc, search_codes, search_words, severity,
                           uds_status_text, why_it_matters)
 import icons
@@ -1823,6 +1824,8 @@ class App:
         else:
             text = ("This vehicle's protocol only lets us read engine and transmission codes "
                     f"({self.elm.protocol_name if self.elm else 'unknown'}).")
+        can_reach = bool(self.elm and self.elm.can_scan_modules)
+        text += "\n" + tire_status(sum(1 for i in self.items if i["module"] == TIRE_MODULE), names, can_reach)
         lbl = tk.Label(box, text=text, bg=C["page"], fg=C["muted"], font=F(12), anchor="w", justify="left")
         lbl.pack(fill="x")
         wrap_on_resize(lbl, 10)
@@ -2016,6 +2019,8 @@ class App:
         merged, seen = {}, set()
 
         def add(code, module, status, resp=""):
+            if is_tire_code(code, describe_dtc(code, self._current_make())["description"]):
+                module = TIRE_MODULE
             key = (code.split("-")[0], module)
             if key in merged:  # same code from the same module (e.g. stored + permanent): one row
                 it = merged[key]
@@ -2399,6 +2404,15 @@ class App:
                     row=i + 2, column=0, sticky="w", pady=2)
                 tk.Label(box, text=value, bg=C["panel"], fg=C["ink"], font=F(13, "bold"), anchor="w").grid(
                     row=i + 2, column=1, sticky="w", padx=(24, 0))
+            notes = advanced.freeze_notes(rows)
+            if notes:
+                r = len(rows) + 2
+                tk.Label(box, text="What this tells you", bg=C["panel"], fg=C["ink"], font=F(14, "bold"),
+                         anchor="w").grid(row=r, column=0, columnspan=2, sticky="w", pady=(12, 2))
+                for i, note in enumerate(notes + ["These are clues to narrow it down, not a diagnosis."]):
+                    tk.Label(box, text=note, bg=C["panel"], fg=C["ink"] if i < len(notes) else C["muted"],
+                             font=F(13 if i < len(notes) else 12), anchor="w", justify="left", wraplength=620).grid(
+                        row=r + 1 + i, column=0, columnspan=2, sticky="w", pady=2)
             self.tiles_area.scroll_to(card)
 
         self.run_bg(work, done, "Reading the freeze frame…")
