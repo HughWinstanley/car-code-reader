@@ -7,21 +7,6 @@ needs (tools), steps, and an optional note (when a shop or scan tool is needed i
 
 GUIDES = [
     {
-        "title": "Add a key (Ford anti-theft, PATS)",
-        "family": "ford",
-        "applies": "Most Ford, Lincoln and Mercury vehicles with chip keys, when you already have two working keys",
-        "needs": "Two keys that already start the vehicle, and the new chip key cut to fit",
-        "steps": [
-            "Put working key 1 in and turn it to ON for about 3 seconds. Turn it OFF and take it out.",
-            "Within 10 seconds, put working key 2 in and turn it to ON for about 3 seconds. Turn it OFF and "
-            "take it out.",
-            "Within 20 seconds, put the new key in and turn it to ON for about 3 seconds.",
-            "If the theft light on the dash comes on for about 3 seconds and goes out, the new key is "
-            "programmed. Start the engine to check.",
-        ],
-        "note": "With only one working key, a locksmith or dealer has to program it.",
-    },
-    {
         "title": "Engine computer reset (Ford keep-alive memory)",
         "family": "ford",
         "applies": "Older Ford, Lincoln and Mercury vehicles (about 1996-2010). Clears learned idle, fuel and "
@@ -36,21 +21,6 @@ GUIDES = [
         ],
         "note": "Your radio presets and clock may reset. The smog-check self-tests also reset, so don't do this "
                 "right before an emissions test.",
-    },
-    {
-        "title": "Anti-theft relearn (GM Passlock)",
-        "family": "gm",
-        "applies": "Many GM cars and trucks from about 1996-2007 (including 1999-2007 Silverado and Sierra) when "
-                   "the engine cranks but won't start and the security light is on or flashing",
-        "needs": "A charged battery (connect a charger if you have one)",
-        "steps": [
-            "Turn the key to ON (don't crank). The security light should come on or flash.",
-            "Leave it for about 10 minutes, until the security light goes off or stops flashing.",
-            "Turn the key OFF for 5 seconds.",
-            "Start the engine. If it still won't start, repeat steps 1-3 two more times (30 minutes total), "
-            "then try again.",
-        ],
-        "note": "If it keeps coming back, the sensor in the ignition lock cylinder is often worn out.",
     },
     {
         "title": "Oil-life reset (GM, pedal method)",

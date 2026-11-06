@@ -553,4 +553,149 @@ final class ELM327 {
         try await restore()
         if let failure { throw failure }
     }
+
+    // MARK: - Deeper read-only tests, ported from the Mac app's advanced.py
+
+    private func withHeaders<T>(_ work: () async throws -> T) async throws -> T {
+        _ = try await link.command("ATH1")
+        do {
+            let out = try await work()
+            _ = try await link.command("ATH0")
+            return out
+        } catch {
+            _ = try? await link.command("ATH0")
+            throw error
+        }
+    }
+
+    /// Which IDs ($01-$FF) a mode supports, from its $00, $20, $40 ... support bitmaps.
+    private func supportedIDs(mode: UInt8) async throws -> [Int] {
+        var found = Set<Int>(), base = 0
+        while base <= 0xE0 {
+            var got = false
+            for (_, messages) in try await request(String(format: "%02X%02X", mode, base)) {
+                for m in messages where m.count >= 6 && m[0] == mode + 0x40 && Int(m[1]) == base {
+                    for i in 0..<32 where m[2 + i / 8] & (0x80 >> UInt8(i % 8)) != 0 { found.insert(base + i + 1) }
+                    got = true
+                }
+            }
+            if !got || !found.contains(base + 0x20) { break }
+            base += 0x20
+        }
+        return found.filter { $0 % 0x20 != 0 }.sorted()
+    }
+
+    /// Live-data PIDs this vehicle says it supports.
+    func supportedPIDs() async throws -> Set<UInt8> {
+        try await withHeaders { Set(try await supportedIDs(mode: 1).map { UInt8($0) }) }
+    }
+
+    private static func testValue(_ raw: Int, _ uas: Int) -> (Double, String) {
+        let signed = uas >= 0x80
+        let value = signed && raw >= 0x8000 ? raw - 0x10000 : raw
+        let (scale, offset, unit) = ProData.units[signed ? uas & 0x7F : uas] ?? (1, 0, "")
+        return (Double(value) * scale + offset, unit)
+    }
+
+    /// Mode $06: the numbers behind each emissions self-test. CAN vehicles only.
+    func selfTests() async throws -> [SelfTest] {
+        guard isCAN else {
+            throw NSError(domain: "CarCodeReader", code: 6, userInfo: [NSLocalizedDescriptionKey:
+                "Self-test results in the standard format are only on vehicles that use CAN (most 2008 and newer). Older vehicles keep them in maker-specific formats."])
+        }
+        return try await withHeaders {
+            var out: [SelfTest] = []
+            for mid in try await supportedIDs(mode: 6) {
+                for (_, messages) in try await request(String(format: "06%02X", mid)) {
+                    for m in messages where m.count >= 2 && m[0] == 0x46 && Int(m[1]) == mid {
+                        let body = Array(m.dropFirst())   // records of 9 bytes: MID, TID, unit, value, minimum, maximum
+                        for i in stride(from: 0, to: body.count - 8, by: 9) where Int(body[i]) == mid {
+                            let number = { (at: Int) in Int(body[at]) << 8 | Int(body[at + 1]) }
+                            let uas = Int(body[i + 2])
+                            let (value, unit) = ELM327.testValue(number(i + 3), uas)
+                            let (low, _) = ELM327.testValue(number(i + 5), uas)
+                            let (high, _) = ELM327.testValue(number(i + 7), uas)
+                            let name = (0xA2...0xAD).contains(mid) ? "Misfire, cylinder \(mid - 0xA1)"
+                                : ProData.midNames[mid] ?? String(format: "Test group $%02X", mid)
+                            out.append(SelfTest(mid: mid, tid: Int(body[i + 1]), name: name, value: value, low: low, high: high,
+                                                unit: unit, passed: low <= value && value <= high))
+                        }
+                    }
+                }
+            }
+            return out
+        }
+    }
+
+    private func mode9(_ type: UInt8) async throws -> [String: [UInt8]] {
+        var out: [String: [UInt8]] = [:]
+        for (ecu, messages) in try await request(String(format: "09%02X", type), timeout: 8) {
+            let parts = messages.filter { $0.count > 3 && $0[0] == 0x49 && $0[1] == type }
+            guard let first = parts.first else { continue }
+            out[ecu] = isCAN ? Array(first.dropFirst(3))            // one message: 49 tt count data...
+                             : parts.sorted { $0[2] < $1[2] }.flatMap { $0.dropFirst(3) }   // older: one per piece
+        }
+        return out
+    }
+
+    /// Mode $09: calibration numbers, module names and how often each self-test has run.
+    func moduleInfo() async throws -> [ModuleInfo] {
+        func text(_ b: ArraySlice<UInt8>) -> String {
+            String(b.filter { (32..<127).contains($0) }.map { Character(UnicodeScalar($0)) }).trimmingCharacters(in: .whitespaces)
+        }
+        return try await withHeaders {
+            var info: [String: ModuleInfo] = [:]
+            func edit(_ ecu: String, _ change: (inout ModuleInfo) -> Void) {
+                var m = info[ecu] ?? ModuleInfo(ecu: ecu)
+                change(&m)
+                info[ecu] = m
+            }
+            for (ecu, d) in try await mode9(0x0A) {
+                let name = d.prefix(20).map { $0 == 0 ? UInt8(32) : $0 }
+                edit(ecu) { $0.name = text(name[...]).replacingOccurrences(of: " -", with: " - ") }
+            }
+            for (ecu, d) in try await mode9(0x04) {
+                let ids = stride(from: 0, to: d.count, by: 16).map { text(d[$0..<min($0 + 16, d.count)]) }.filter { !$0.isEmpty }
+                edit(ecu) { $0.calids = ids }
+            }
+            for (ecu, d) in try await mode9(0x06) {
+                let cvns = stride(from: 0, to: d.count - 3, by: 4).map { i in d[i..<i + 4].map { String(format: "%02X", $0) }.joined() }
+                edit(ecu) { $0.cvns = cvns }
+            }
+            let names = ["Catalyst, bank 1", "Catalyst, bank 2", "Oxygen sensor, bank 1", "Oxygen sensor, bank 2", "EGR / valve timing",
+                         "Secondary air", "EVAP system", "Rear oxygen sensor, bank 1", "Rear oxygen sensor, bank 2"]
+            for (ecu, d) in try await mode9(0x08) {
+                let counts = stride(from: 0, to: d.count - 1, by: 2).map { Int(d[$0]) << 8 | Int(d[$0 + 1]) }
+                var usage: [(String, String)] = []
+                if counts.count >= 2 {
+                    usage.append(("Times the driving conditions for self-tests were met", String(counts[0])))
+                    usage.append(("Ignition cycles counted", String(counts[1])))
+                }
+                for (k, name) in names.enumerated() {
+                    let i = 2 + 2 * k
+                    if i + 1 < counts.count, counts[i + 1] != 0 { usage.append((name, "ran \(counts[i]) times in \(counts[i + 1]) chances")) }
+                }
+                edit(ecu) { $0.usage = usage }
+            }
+            return info.keys.sorted().compactMap { info[$0] }
+        }
+    }
+
+    /// Mode $02: the engine readings saved when the check-engine light came on.
+    func freezeFrame() async throws -> [(String, String)] {
+        try await withHeaders {
+            func read(_ pid: UInt8) async throws -> [UInt8]? {
+                for (_, messages) in try await request(String(format: "02%02X00", pid), timeout: 3).sorted(by: { $0.key < $1.key }) {
+                    for m in messages where m.count > 3 && m[0] == 0x42 && m[1] == pid { return Array(m.dropFirst(3)) }
+                }
+                return nil
+            }
+            guard let first = try await read(2), first.count >= 2, first[0] != 0 || first[1] != 0 else { return [] }
+            var rows = [("Code that saved this snapshot", ELM327.decode(first[0], first[1]))]
+            for p in PIDs.list {
+                if let d = try await read(p.pid), d.count >= p.len { rows.append((p.name, p.format(p.decode(d)))) }
+            }
+            return rows
+        }
+    }
 }

@@ -15,6 +15,8 @@
 		25A352301275A84932B009B8 /* Readiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AFE5B52EE8432CF7FAA0D2A /* Readiness.swift */; };
 		3915187191D224297F783863 /* WifiLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19057ACA9E79FF9AB3DCEFCA /* WifiLink.swift */; };
 		A1C4E7F20B3D596870ACD111 /* UpdateCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C4E7F20B3D596870ACD222 /* UpdateCheck.swift */; };
+		A1C4E7F20B3D596870ACD333 /* ProFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C4E7F20B3D596870ACD444 /* ProFeatures.swift */; };
+		A1C4E7F20B3D596870ACD555 /* ProData.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C4E7F20B3D596870ACD666 /* ProData.swift */; };
 		70EE588C003629B12094698A /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39AAA60214B0F4739A7AFFF2 /* ContentView.swift */; };
 		73E7EC5B7FA13D80CCD3D8E1 /* DTC.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7219BE45C9155CB6EDF4C629 /* DTC.swift */; };
 		82B137F24805E3A29162F556 /* Reader.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEBC534CB1E74E979CB06E67 /* Reader.swift */; };
@@ -31,6 +33,8 @@
 		0FE63F923D748A14A9968E3C /* Semi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Semi.swift; sourceTree = "<group>"; };
 		19057ACA9E79FF9AB3DCEFCA /* WifiLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WifiLink.swift; sourceTree = "<group>"; };
 		A1C4E7F20B3D596870ACD222 /* UpdateCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateCheck.swift; sourceTree = "<group>"; };
+		A1C4E7F20B3D596870ACD444 /* ProFeatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProFeatures.swift; sourceTree = "<group>"; };
+		A1C4E7F20B3D596870ACD666 /* ProData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProData.swift; sourceTree = "<group>"; };
 		255D1FE58E2386F38D9AE609 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		25F853910FB81174177BABE1 /* PIDs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PIDs.swift; sourceTree = "<group>"; };
 		2CF87C8E586C39C027BFD1BF /* OBD1J1939Data.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OBD1J1939Data.swift; sourceTree = "<group>"; };
@@ -76,6 +80,8 @@
 				CF520B3632CAC4A64D74FF9E /* OBDLink.swift */,
 				19057ACA9E79FF9AB3DCEFCA /* WifiLink.swift */,
 				A1C4E7F20B3D596870ACD222 /* UpdateCheck.swift */,
+				A1C4E7F20B3D596870ACD444 /* ProFeatures.swift */,
+				A1C4E7F20B3D596870ACD666 /* ProData.swift */,
 				638CF2ECF996025D897A67B0 /* BLELink.swift */,
 				96AA83782CB713F9F6238817 /* ELM327.swift */,
 				7219BE45C9155CB6EDF4C629 /* DTC.swift */,
@@ -174,6 +180,8 @@
 				FB147E7C28E1D728161C44DB /* OBDLink.swift in Sources */,
 				3915187191D224297F783863 /* WifiLink.swift in Sources */,
 				A1C4E7F20B3D596870ACD111 /* UpdateCheck.swift in Sources */,
+				A1C4E7F20B3D596870ACD333 /* ProFeatures.swift in Sources */,
+				A1C4E7F20B3D596870ACD555 /* ProData.swift in Sources */,
 				B6A2233D6B55279F8C33474B /* BLELink.swift in Sources */,
 				1D89C21F19776B5BE214233F /* ELM327.swift in Sources */,
 				73E7EC5B7FA13D80CCD3D8E1 /* DTC.swift in Sources */,

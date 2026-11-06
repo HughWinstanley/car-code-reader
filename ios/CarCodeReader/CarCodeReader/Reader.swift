@@ -11,7 +11,15 @@ struct Problem: Identifiable {
     var module = "Engine"      // friendly name of the module that reported it
 }
 
-struct LiveReading: Identifiable { let id = UUID(); let name: String; let value: String }
+struct LiveReading: Identifiable {
+    let id = UUID()
+    let name: String
+    let value: String
+    /// "197 °F  (91 °C)" -> "197 °F"
+    var mainValue: String { value.split(separator: "(", maxSplits: 1).first.map { $0.trimmingCharacters(in: .whitespaces) } ?? value }
+    var number: Double? { mainValue.split(separator: " ").first.flatMap { Double($0) } }
+    var unit: String { mainValue.split(separator: " ", maxSplits: 1).dropFirst().first.map(String.init) ?? "" }
+}
 
 /// Which home tile started the scan — drives the Problems page's wording.
 enum ScanKind { case engine, safety, all }
@@ -47,6 +55,26 @@ final class Reader: ObservableObject {
     @Published var year: Int? = nil
     @Published var chosenName = ""
     @Published var chosenMake = ""
+    @Published var chosenModel = ""
+    @Published var selfTests: [SelfTest] = []
+    @Published var moduleInfo: [ModuleInfo] = []
+    @Published var freezeFrame: [(String, String)] = []
+    @Published var freezeFrameRead = false
+    @Published var testMessage = ""
+    @Published var batteryRows: [BatteryRow] = []
+    @Published var batteryPrompt: String? = nil
+    @Published var batteryNote = ""
+    var batteryRest = 0.0
+    var batteryStep = 0
+    @Published var recalls: [Recall]? = nil
+    @Published var recallStatus = ""
+    @Published var adapterLog: [String] = []
+    @Published var liveStats: [String: (Double, Double)] = [:]
+    @Published var liveSeries: [String: [(Date, Double)]] = [:]
+    @Published var graphKeys: [String] = []
+    @Published var recording = false
+    @Published var recordingRows: [(Date, [String: Double])] = []
+    var recordingUnits: [String: String] = [:]
     @Published var moduleNames: [String] = []   // modules that answered the last scan
     @Published var canScanModules = false
     private var scannedModules: [ScannedModule] = []
@@ -54,15 +82,20 @@ final class Reader: ObservableObject {
     private var demoSamples: [(String, String, String)] = []
 
     private var link: OBDLink?
-    private var elm: ELM327?
+    var elm: ELM327?
     private var liveTask: Task<Void, Never>?
 
     func connect() {
         guard !busy else { return }
         busy = true
         status = useBluetooth ? "Looking for a Bluetooth adapter…" : "Connecting to \(host):\(port)…"
-        let newLink: OBDLink = useBluetooth ? BLELink()
-            : WifiLink(host: host, port: UInt16(port) ?? 35000)
+        let raw: OBDLink = useBluetooth ? BLELink() : WifiLink(host: host, port: UInt16(port) ?? 35000)
+        let newLink = LoggingLink(raw) { [weak self] line in
+            Task { @MainActor in
+                self?.adapterLog.append(line)
+                if (self?.adapterLog.count ?? 0) > 2000 { self?.adapterLog.removeFirst(500) }
+            }
+        }
         Task {
             do {
                 try await newLink.connect()
@@ -90,6 +123,7 @@ final class Reader: ObservableObject {
         connected = false; scanned = false; problems = []; live = []
         monitors = []; vin = ""; battery = ""; status = "Not connected"
         lastScanAt = nil; milOn = nil; moduleNames = []; scannedModules = []; canScanModules = false
+        clearPerVehicleResults()
     }
 
     func scan(deep: Bool = false) {
@@ -102,6 +136,13 @@ final class Reader: ObservableObject {
             await scanInternal(e, deep: deep)
             busy = false
         }
+    }
+
+    private func clearPerVehicleResults() {
+        selfTests = []; moduleInfo = []; freezeFrame = []; freezeFrameRead = false; testMessage = ""
+        batteryRows = []; batteryPrompt = nil; batteryNote = ""
+        recalls = nil; recallStatus = ""
+        liveStats = [:]; liveSeries = [:]; graphKeys = []; recording = false; recordingRows = []
     }
 
     /// Stop a module scan after the module it's on.
@@ -146,7 +187,15 @@ final class Reader: ObservableObject {
             }
             applyScan(obd: obd, modules: modules)
             if let ready { applySmog(ready) }
+            saveToHistory()
         } catch { status = "Scan error: \(error.localizedDescription)" }
+    }
+
+    private func saveToHistory() {
+        let name = chosenName.isEmpty ? (vin.isEmpty ? "Unknown vehicle" : "Vehicle \(vin)") : chosenName
+        let kind = scanKind == .engine ? "engine" : scanKind == .safety ? "safety" : "all"
+        ScanHistory.add(ScanRecord(when: Date(), vehicle: vin.count == 17 ? vin : name, name: name, vin: vin, kind: kind, milOn: milOn,
+                                   codes: problems.map { .init(code: $0.code, text: $0.meaning, module: $0.module, status: $0.status, level: $0.urgency) }))
     }
 
     /// Merge everything into one list: a code from the same module shows once (the Mac app's _apply_scan).
@@ -224,7 +273,9 @@ final class Reader: ObservableObject {
         if isDemo { return }
         guard let e = elm, !busy else { return }
         busy = true
+        let live = pauseLive()
         Task {
+            await live?.value
             if let d = try? await e.readiness() { applySmog(d) }
             busy = false
         }
@@ -252,6 +303,8 @@ final class Reader: ObservableObject {
     }
 
     func setVehicle(makeName: String, model: String, year: Int) {
+        chosenModel = model
+        recalls = nil; recallStatus = ""
         let fam = VehicleData.family[makeName] ?? "Other"
         make = (fam == "Ford") ? .ford : (fam == "GM" ? .gm : .other)
         self.year = year
@@ -273,6 +326,7 @@ final class Reader: ObservableObject {
         battery = "14.1 V"
         chosenName = "2015 Honda Accord EX"
         chosenMake = "Honda"
+        chosenModel = "Accord"
         year = 2015
 
         canScanModules = true
@@ -346,7 +400,8 @@ final class Reader: ObservableObject {
         problems = []; live = []; liveRunning = false
         monitors = []; smogText = ""; smogOK = false; smogDetail = ""
         semiFaults = []; semiStatus = ""
-        vin = ""; battery = ""; protocolName = ""; chosenName = ""; chosenMake = ""; year = nil
+        vin = ""; battery = ""; protocolName = ""; chosenName = ""; chosenMake = ""; chosenModel = ""; year = nil
+        clearPerVehicleResults()
         lastScanAt = nil; milOn = nil; moduleNames = []; canScanModules = false; demoSamples = []
         status = "Not connected"
     }
@@ -356,7 +411,9 @@ final class Reader: ObservableObject {
         guard let link = link else { semiStatus = "Connect on the Problems tab first."; return }
         guard !busy else { return }
         busy = true; semiStatus = "Listening to the truck's J1939 network…"; semiFaults = []
+        let live = pauseLive()
         Task {
+            await live?.value
             do {
                 _ = try await link.command("ATSP A")                 // SAE J1939
                 _ = try await link.command("ATH1")                   // show message IDs
@@ -374,15 +431,64 @@ final class Reader: ObservableObject {
         }
     }
 
+    /// Publish one round of readings and keep the low/high, graph and recording up to date.
+    private func applyLive(_ readings: [LiveReading]) {
+        live = readings
+        let now = Date()
+        var row: [String: Double] = [:]
+        for reading in readings {
+            guard let v = reading.number else { continue }
+            let old = liveStats[reading.name]
+            liveStats[reading.name] = (min(old?.0 ?? v, v), max(old?.1 ?? v, v))
+            var points = liveSeries[reading.name] ?? []
+            points.append((now, v))
+            points.removeAll { now.timeIntervalSince($0.0) > 90 }
+            liveSeries[reading.name] = points
+            row[reading.name] = v
+            recordingUnits[reading.name] = reading.unit
+        }
+        if recording { recordingRows.append((now, row)) }
+    }
+
+    func toggleGraph(_ name: String) {
+        if let at = graphKeys.firstIndex(of: name) {
+            graphKeys.remove(at: at)
+        } else {
+            if graphKeys.count >= 4 { graphKeys.removeFirst() }
+            graphKeys.append(name)
+        }
+    }
+
+    func toggleRecording() {
+        if !recording { recordingRows = [] }
+        recording.toggle()
+    }
+
     func toggleLive() {
-        if isDemo { liveRunning.toggle(); return }
         if liveRunning { stopLive(); return }
+        if isDemo {
+            liveRunning = true
+            let base = live
+            liveTask = Task { [weak self] in
+                while !Task.isCancelled {   // sample data that moves a little, so the graphs have something to show
+                    self?.applyLive(base.map { reading in
+                        guard let v = reading.number, v != 0 else { return reading }
+                        let moved = v * Double.random(in: 0.96...1.04)
+                        return LiveReading(name: reading.name, value: String(format: abs(v) < 20 ? "%.1f %@" : "%.0f %@", moved, reading.unit))
+                    })
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                }
+            }
+            return
+        }
         guard let e = elm, !busy else { return }
         liveRunning = true
         liveTask = Task {
+            let supported = (try? await e.supportedPIDs()) ?? []
+            let pids = supported.isEmpty ? PIDs.list : PIDs.list.filter { supported.contains($0.pid) }
             while !Task.isCancelled {
                 var out: [LiveReading] = []
-                for p in PIDs.list {
+                for p in pids {
                     if Task.isCancelled { return }
                     if let data = try? await e.pid(p.pid), data.count >= p.len {
                         out.append(LiveReading(name: p.name, value: p.format(p.decode(data))))
@@ -400,17 +506,17 @@ final class Reader: ObservableObject {
                         out.append(LiveReading(name: "Transmission fluid temp", value: PIDs.f(c, "degC")))
                     }
                 }
-                if !out.isEmpty { live = out }
+                if !out.isEmpty { applyLive(out) }
             }
         }
     }
 
     /// Stop live data and hand back its task, so the caller can wait until it has really finished.
-    private func pauseLive() -> Task<Void, Never>? {
+    func pauseLive() -> Task<Void, Never>? {
         let task = liveTask
         stopLive()
         return task
     }
 
-    func stopLive() { liveTask?.cancel(); liveTask = nil; liveRunning = false }
+    func stopLive() { liveTask?.cancel(); liveTask = nil; liveRunning = false; recording = false }
 }

@@ -84,6 +84,15 @@ PIDS = {
     0x4E: ("Time since codes cleared", lambda d: d[0] * 256 + d[1], "min"),
     0x52: ("Ethanol in fuel", lambda d: d[0] * 100 / 255, "%"),
     0x5E: ("Fuel use rate", lambda d: (d[0] * 256 + d[1]) / 20, "L/h"),
+    0x3E: ("Catalyst temperature, bank 1 sensor 2", lambda d: (d[0] * 256 + d[1]) / 10 - 40, "°C"),
+    0x3F: ("Catalyst temperature, bank 2 sensor 2", lambda d: (d[0] * 256 + d[1]) / 10 - 40, "°C"),
+    0x47: ("Absolute throttle position B", lambda d: d[0] * 100 / 255, "%"),
+    0x4A: ("Accelerator pedal position E", lambda d: d[0] * 100 / 255, "%"),
+    0x59: ("Fuel rail absolute pressure", lambda d: (d[0] * 256 + d[1]) * 10, "kPa"),
+    0x5B: ("Hybrid battery charge left", lambda d: d[0] * 100 / 255, "%"),
+    0x61: ("Driver's demand engine torque", lambda d: d[0] - 125, "%"),
+    0x62: ("Actual engine torque", lambda d: d[0] - 125, "%"),
+    0x63: ("Engine reference torque", lambda d: d[0] * 256 + d[1], "Nm"),
 }
 
 

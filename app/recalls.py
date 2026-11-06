@@ -79,6 +79,24 @@ def recalls_for(make, model, year):
     return d.get("results", [])
 
 
+def direct_names(model):
+    """Names to ask the recall search for directly: 'F-250 Super Duty' -> ['F-250 SD']. NHTSA's model list can leave
+    out vehicles that do have recalls, so the list alone can't be trusted to say a vehicle isn't there."""
+    model = re.sub(r"\(.*?\)", "", model or "")
+    parts = [p.strip() for p in model.split("/") if p.strip()]
+    if not parts:
+        return []
+    first_word = parts[0].split()[0]
+    out = []
+    for p in parts:
+        if p[:1].isdigit():
+            p = f"{first_word} {p}"
+        name = p.upper().replace("SUPER DUTY", "SD").replace("HEAVY DUTY", "HD")
+        if name not in out:
+            out.append(name)
+    return out
+
+
 def find(make, model, year, vin=""):
     """-> (recalls, how_matched). Each recall: dict with campaign, date, component, summary, consequence,
     remedy, park_it. Only vehicle recalls; aftermarket equipment recalls are left out. Raises if offline."""
@@ -93,9 +111,18 @@ def find(make, model, year, vin=""):
     if not (make and model and year):
         return [], []
     names = matching_models(model, models_for(make, year))
+    listed = {_norm(n) for n in names}
     seen, out = set(), []
-    for name in names:
-        for r in recalls_for(make, name, year):
+    for name in names + [n for n in direct_names(model) if _norm(n) not in listed]:
+        try:
+            results = recalls_for(make, name, year)
+        except Exception:  # noqa: BLE001 - the search answers an unknown name with an error
+            if name in names:
+                raise
+            results = []
+        if results and name not in names:  # not in NHTSA's list, but the search knows it
+            names.append(name)
+        for r in results:
             camp = r.get("NHTSACampaignNumber", "")
             if not camp or camp in seen or camp[2:3] != "V":  # 'V' = vehicle recall ('E' = aftermarket part)
                 continue

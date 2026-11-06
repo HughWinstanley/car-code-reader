@@ -23,6 +23,7 @@ enum PIDs {
         case "min":    return String(format: "%.0f min", v)
         case "km":     return String(format: "%.0f km  (%.0f mi)", v, v * 0.621371)
         case "count":  return String(format: "%.0f", v)
+        case "nm":     return String(format: "%.0f Nm", v)
         case "lambda": return String(format: "%.2f λ", v)
         case "lph":    return String(format: "%.1f L/h  (%.1f gal/h)", v, v * 0.264172)
         default:       return String(format: "%.1f", v)
@@ -78,5 +79,14 @@ enum PIDs {
         p(0x21, "Distance driven with light on", 2, { Double($0[0]) * 256 + Double($0[1]) }, "km"),
         p(0x31, "Distance since codes cleared", 2, { Double($0[0]) * 256 + Double($0[1]) }, "km"),
         p(0x30, "Warm-ups since codes cleared", 1, { Double($0[0]) }, "count"),
+        p(0x3E, "Catalyst temperature, bank 1 sensor 2", 2, { (Double($0[0]) * 256 + Double($0[1])) / 10 - 40 }, "degC"),
+        p(0x3F, "Catalyst temperature, bank 2 sensor 2", 2, { (Double($0[0]) * 256 + Double($0[1])) / 10 - 40 }, "degC"),
+        p(0x47, "Absolute throttle position B", 1, { Double($0[0]) * 100 / 255 }, "pct"),
+        p(0x4A, "Accelerator pedal position E", 1, { Double($0[0]) * 100 / 255 }, "pct"),
+        p(0x59, "Fuel rail absolute pressure", 2, { (Double($0[0]) * 256 + Double($0[1])) * 10 }, "kpa"),
+        p(0x5B, "Hybrid battery charge left", 1, { Double($0[0]) * 100 / 255 }, "pct"),
+        p(0x61, "Driver's demand engine torque", 1, { Double($0[0]) - 125 }, "pct"),
+        p(0x62, "Actual engine torque", 1, { Double($0[0]) - 125 }, "pct"),
+        p(0x63, "Engine reference torque", 2, { Double($0[0]) * 256 + Double($0[1]) }, "nm"),
     ]
 }

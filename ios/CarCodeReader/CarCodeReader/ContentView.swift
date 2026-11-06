@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "2.12 — Nov 5" }
+enum AppInfo { static let version = "2.13 — Nov 5" }
 enum Tab { case home, problems, live, smog, settings }
 
 extension Color {
@@ -402,6 +402,16 @@ struct HomeTab: View {
         selection = .problems
     }
 
+    /// A tile for pages with no drawn picture from the Mac app: a symbol on a pale circle.
+    private func symbolTile(_ title: String, _ subtitle: String, _ symbol: String, _ tint: Color) -> some View {
+        TileCard(title: title, subtitle: subtitle) {
+            ZStack {
+                Circle().fill(tint.opacity(0.18)).frame(width: 66, height: 66)
+                Image(systemName: symbol).font(.system(size: 28, weight: .semibold)).foregroundStyle(tint)
+            }
+        }
+    }
+
     private func tile(_ title: String, _ subtitle: String, _ icon: String) -> some View {
         TileCard(title: title, subtitle: subtitle) {
             Image(icon).resizable().scaledToFit().frame(height: 72)
@@ -447,6 +457,28 @@ struct HomeTab: View {
                             Button { showPicker = true } label: {
                                 tile("Choose vehicle", "Make, model and year", "icon-vehicle")
                             }.buttonStyle(.plain)
+                        }
+                        GridRow {
+                            NavigationLink { TestsView() } label: {
+                                symbolTile("Tests", "Battery, self-tests and misfires", "checklist", MacTint.scan)
+                            }.buttonStyle(.plain)
+                            NavigationLink { ServiceView() } label: {
+                                symbolTile("Service", "Resets and relearns by hand", "wrench.and.screwdriver.fill", Color(hex: "#B03E6E"))
+                            }.buttonStyle(.plain)
+                        }
+                        GridRow {
+                            NavigationLink { VehiclePageView() } label: {
+                                symbolTile("Vehicle", "VIN, battery and safety recalls", "car.fill", MacTint.vehicle)
+                            }.buttonStyle(.plain)
+                            NavigationLink { HistoryView() } label: {
+                                symbolTile("History", "Every scan, saved by vehicle", "clock.arrow.circlepath", Color(hex: "#2C5C9A"))
+                            }.buttonStyle(.plain)
+                        }
+                        GridRow {
+                            NavigationLink { HelpView() } label: {
+                                symbolTile("Help", "Steps and the adapter log", "questionmark", Color(hex: "#5E7488"))
+                            }.buttonStyle(.plain)
+                            Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
                         }
                     }
                 }
@@ -760,6 +792,13 @@ struct ProblemsTab: View {
                         Button("Clear codes") { confirmClear = true }
                             .buttonStyle(PillStyle(kind: .danger, big: true)).disabled(reader.busy)
                     }
+                    if reader.scanned {
+                        ShareLink(item: ExportFile(data: Data(reader.reportHTML().utf8), name: "vehicle-report.html"),
+                                  preview: SharePreview("Vehicle report")) {
+                            Text("Save report")
+                        }
+                        .buttonStyle(PillStyle(big: true))
+                    }
                     if reader.busy {
                         Button("Stop") { reader.stopScan() }.buttonStyle(PillStyle(big: true))
                     }
@@ -826,18 +865,38 @@ struct LiveTab: View {
                               subtitle: "What the engine computer sees right now. Values update about once a second.",
                               icon: "icon-gauge")
                     if reader.connected {
-                        if !reader.live.isEmpty {
-                            Button(reader.liveRunning ? "Stop" : "Start live data") { reader.toggleLive() }
-                                .buttonStyle(PillStyle(kind: .primary))
+                        FlowLayout {
+                            if !reader.live.isEmpty {
+                                Button(reader.liveRunning ? "Stop" : "Start live data") { reader.toggleLive() }
+                                    .buttonStyle(PillStyle(kind: .primary))
+                            }
+                            Button("Show freeze frame") { reader.readFreezeFrame() }
+                                .buttonStyle(PillStyle()).disabled(reader.busy)
+                            if reader.liveRunning {
+                                Button(reader.recording ? "Stop recording" : "Record") { reader.toggleRecording() }
+                                    .buttonStyle(PillStyle())
+                            }
+                            if !reader.recording && !reader.recordingRows.isEmpty {
+                                ShareLink(item: ExportFile(data: Data(reader.recordingCSV().utf8), name: "drive-recording.csv"),
+                                          preview: SharePreview("Drive recording")) {
+                                    Text("Save recording")
+                                }
+                                .buttonStyle(PillStyle())
+                            }
                         }
+                        if reader.freezeFrameRead { freezeFrameCard }
+                        if !reader.graphKeys.isEmpty { LiveGraphCard() }
                         vehicleCard
                         if reader.live.isEmpty {
                             EmptyStateCard(icon: "icon-gauge", title: "Ready when you are",
                                            message: "Tap Start live data to watch speed, RPM, temperatures and more, updated every second.",
                                            buttonTitle: "Start live data") { reader.toggleLive() }
                         } else {
+                            Text("Tap any reading to graph it").font(.system(size: 12)).foregroundStyle(MacColor.muted)
                             TileGrid(items: reader.live.map(\.name)) { name in
-                                if let r = reader.live.first(where: { $0.name == name }) { readingTile(r) }
+                                if let r = reader.live.first(where: { $0.name == name }) {
+                                    readingTile(r).onTapGesture { reader.toggleGraph(name) }
+                                }
                             }
                         }
                     } else {
@@ -846,6 +905,28 @@ struct LiveTab: View {
                     }
                 }
                 .padding(16)
+            }
+        }
+    }
+
+    private var freezeFrameCard: some View {
+        RoundCard {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Freeze frame").font(.system(size: 15, weight: .bold)).foregroundStyle(MacColor.ink)
+                if reader.freezeFrame.isEmpty {
+                    Text("No snapshot stored. One is saved when the check-engine light comes on.")
+                        .font(.system(size: 13)).foregroundStyle(MacColor.muted)
+                } else {
+                    Text("A snapshot of the engine at the moment the check-engine light came on.")
+                        .font(.system(size: 12)).foregroundStyle(MacColor.muted)
+                    ForEach(reader.freezeFrame, id: \.0) { row in
+                        HStack(alignment: .top) {
+                            Text(row.0).font(.system(size: 13)).foregroundStyle(MacColor.ink)
+                            Spacer(minLength: 8)
+                            Text(row.1).font(.system(size: 13, weight: .bold)).foregroundStyle(MacColor.ink)
+                        }
+                    }
+                }
             }
         }
     }
@@ -877,11 +958,17 @@ struct LiveTab: View {
             if !alt.isEmpty { Text(alt).font(.system(size: 12)).foregroundStyle(MacColor.muted) }
             Text(r.name).font(.system(size: 13)).foregroundStyle(MacColor.ink)
                 .fixedSize(horizontal: false, vertical: true).padding(.top, 1)
+            if let stats = reader.liveStats[r.name] {
+                Text(String(format: "Low %g · High %g %@", (stats.0 * 10).rounded() / 10, (stats.1 * 10).rounded() / 10, r.unit))
+                    .font(.system(size: 11)).foregroundStyle(MacColor.muted).lineLimit(1).minimumScaleFactor(0.7)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.horizontal, 16).padding(.vertical, 14)
         .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(MacColor.panel))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(MacColor.line, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .stroke(reader.graphKeys.contains(r.name) ? MacColor.ink : MacColor.line, lineWidth: reader.graphKeys.contains(r.name) ? 2 : 1))
+        .contentShape(Rectangle())
     }
 }
 
