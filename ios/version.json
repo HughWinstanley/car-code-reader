@@ -1,4 +1,4 @@
 {
-  "version": "2.19",
-  "notes": "Freeze frame now explains what its numbers mean, and Full scan shows a tire pressure (TPMS) line."
+  "version": "2.20",
+  "notes": "Normal ranges on Live data, your own custom dashboard, step-by-step repair help, and tire pressure readings on some Fords and older GM trucks."
 }

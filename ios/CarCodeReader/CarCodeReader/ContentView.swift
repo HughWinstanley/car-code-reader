@@ -710,6 +710,7 @@ struct ProblemCard: View {
             }
 
             FlowLayout {
+                GuidedButton(code: problem.code)
                 Button("Search for repair info") { search() }.buttonStyle(PillStyle())
                 Button("Repair videos") { search(videos: true) }.buttonStyle(PillStyle())
             }
@@ -941,6 +942,28 @@ struct ProblemsTab: View {
 
 struct LiveTab: View {
     @EnvironmentObject var reader: Reader
+    @AppStorage("dashboardPins") private var pinsText = ""
+    @AppStorage("dashboardOnly") private var onlyPins = false
+    @State private var editing = false
+
+    private var pins: [String] { pinsText.split(separator: "\n").map(String.init) }
+    private var pinsBinding: Binding<[String]> {
+        Binding(get: { pins }, set: { pinsText = $0.joined(separator: "\n") })
+    }
+    private var allNames: [String] {
+        reader.live.isEmpty ? PIDs.list.map(\.name) : reader.live.map(\.name)
+    }
+
+    private func liveGrid(_ names: [String]) -> some View {
+        TileGrid(items: names) { name in
+            if let r = reader.live.first(where: { $0.name == name }) {
+                readingTile(r).onTapGesture { reader.toggleGraph(name) }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint(reader.graphKeys.contains(name) ? "Removes it from the graph" : "Adds it to the graph")
+            }
+        }
+    }
 
     var body: some View {
         MacPage {
@@ -957,6 +980,7 @@ struct LiveTab: View {
                             }
                             Button("Show freeze frame") { reader.readFreezeFrame() }
                                 .buttonStyle(PillStyle()).disabled(reader.busy)
+                            Button("Customize dashboard") { editing = true }.buttonStyle(PillStyle())
                             if reader.liveRunning {
                                 Button(reader.recording ? "Stop recording" : "Record") { reader.toggleRecording() }
                                     .buttonStyle(PillStyle())
@@ -978,14 +1002,20 @@ struct LiveTab: View {
                                            buttonTitle: "Start live data") { reader.toggleLive() }
                         } else {
                             Text("Tap any reading to graph it").scaledFont(12).foregroundStyle(MacColor.muted)
-                            TileGrid(items: reader.live.map(\.name)) { name in
-                                if let r = reader.live.first(where: { $0.name == name }) {
-                                    readingTile(r).onTapGesture { reader.toggleGraph(name) }
-                                        .accessibilityElement(children: .combine)
-                                        .accessibilityAddTraits(.isButton)
-                                        .accessibilityHint(reader.graphKeys.contains(name) ? "Removes it from the graph" : "Adds it to the graph")
-                                }
+                            let names = reader.live.map(\.name)
+                            let pinned = pins.filter { names.contains($0) }
+                            if !pinned.isEmpty {
+                                Text("My dashboard").scaledFont(16, weight: .bold).foregroundStyle(MacColor.ink)
+                                liveGrid(pinned)
                             }
+                            if !(onlyPins && !pinned.isEmpty) {
+                                if !pinned.isEmpty {
+                                    Text("Other readings").scaledFont(16, weight: .bold).foregroundStyle(MacColor.ink)
+                                }
+                                liveGrid(names.filter { !pinned.contains($0) })
+                            }
+                            Text(NormalRanges.note).scaledFont(12).foregroundStyle(MacColor.muted)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     } else {
                         EmptyStateCard(icon: "icon-gauge", title: "Not connected yet",
@@ -994,6 +1024,7 @@ struct LiveTab: View {
                 }
                 .padding(16)
             }
+            .sheet(isPresented: $editing) { DashboardEditor(names: allNames, pins: pinsBinding, only: $onlyPins) }
         }
     }
 
@@ -1058,6 +1089,12 @@ struct LiveTab: View {
             if let stats = reader.liveStats[r.name] {
                 Text(String(format: "Low %g · High %g %@", (stats.0 * 10).rounded() / 10, (stats.1 * 10).rounded() / 10, r.unit))
                     .scaledFont(11).foregroundStyle(MacColor.muted).lineLimit(1).minimumScaleFactor(0.7)
+            }
+            if let range = NormalRanges.range(r.name) {
+                let off = r.number.map { NormalRanges.outside(r.name, $0) } ?? false
+                Text(off ? "Outside normal. " + range.text : range.text)
+                    .scaledFont(11, weight: off ? .bold : .regular).foregroundStyle(off ? MacTint.engine : MacColor.muted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

@@ -307,6 +307,38 @@ WMI = {
 }
 
 
+# Tire pressures: every maker does this its own way, so only commands with a real source are listed here.
+# Ford: owner reports on several models. GM: an owner's report on a 2005-era Tahoe, matched to the dash; later
+# GMs don't answer these. Nothing here has been checked against a tire gauge, and the app says so.
+TIRE_WHEELS = ("Left front", "Right front", "Right rear", "Left rear")
+TIRE_DIDS = {"ford": (0x2813, 0x2814, 0x2815, 0x2816), "gm": (0x248E, 0x248F, 0x2490, 0x2491)}
+TIRE_NOTES = {
+    "ford": "From owner reports, not confirmed on your vehicle. Check against a tire gauge. Readings can lag by "
+            "about 30 seconds, and wheel positions can be swapped after a tire rotation.",
+    "gm": "From one owner's report on a 2005-era Tahoe, where the numbers matched the dash. Not confirmed on your "
+          "vehicle. Check against a tire gauge.",
+}
+TIRE_UNSUPPORTED = ("We don't have a reliable way to read tire pressures on this vehicle yet, so none are shown. "
+                    "If you haven't yet, pick your vehicle in Choose vehicle and try again. Any tire codes still show "
+                    "in Full scan.")
+TIRE_NO_ANSWER = "The vehicle didn't report tire pressures. Some models don't share them this way."
+
+
+def tire_psi(source, data):
+    """Decode one wheel -> psi. Missing or impossible values give None, so a bad reading is never shown as real."""
+    if source == "ford":
+        if len(data) < 2:
+            return None
+        if not (data[0] or data[1]):  # all zeros means no reading, not a flat tire
+            return None
+        psi = ((256 * data[0] + data[1]) / 3 + 22 / 3) * 0.145
+    else:
+        if len(data) < 1:
+            return None
+        psi = data[0]
+    return psi if 1 <= psi <= 90 else None
+
+
 def make_from_vin(vin):
     return WMI.get((vin or "")[:2].upper(), "") if vin and len(vin) == 17 else ""
 
@@ -428,6 +460,9 @@ class DemoTransport:
         hdr = int(self._hdr, 16) if len(self._hdr) == 3 else 0
         if req[0] in (0x19, 0x14):
             return self._uds(hdr, req)
+        if hdr == 0x726 and req[0] == 0x22 and len(req) == 3:  # tire pressures from the body module
+            raw = {0x2813: 702, 0x2814: 702, 0x2815: 690, 0x2816: 620}.get(req[1] * 256 + req[2])
+            return self._frames("72E", bytes([0x62, req[1], req[2]]) + raw.to_bytes(2, "big")) if raw else ["NO DATA"]
         if hdr in (0x7DF, 0x7E0):
             return self._obd(req)
         return ["NO DATA"]
@@ -564,6 +599,9 @@ class DemoOldGMTransport(DemoTransport):
         if not re.fullmatch(r"[0-9A-F]+", c) or len(c) % 2:
             return ["?"]
         req = bytes.fromhex(c)
+        if self._hdr == "6CA1F1" and req[0] == 0x22 and len(req) == 3:  # tire pressures
+            psi = {0x248E: 35, 0x248F: 35, 0x2490: 34, 0x2491: 29}.get(req[1] * 256 + req[2])
+            return [self._f([0x6C, 0xF1, 0xA1], [0x62, req[1], req[2], psi])] if psi else ["NO DATA"]
         if self._hdr.startswith("6C") and len(self._hdr) == 6:
             addr = int(self._hdr[2:4], 16)
             if addr not in self._old:
@@ -814,6 +852,35 @@ class ELM327:
                 if m[:3] == want and len(m) > 3:
                     return m[3:]
         return None
+
+    def tire_source(self):
+        """Which set of tire pressure commands fits this vehicle, or None."""
+        if self.make == "Ford" and self.is_can and not self.is_29bit:
+            return "ford"
+        if self.make == "GM" and self.protocol == "2":
+            return "gm"
+        return None
+
+    def read_tire_pressures(self):
+        """Read-only. -> [(wheel, psi or None)], or None if we have no commands for this vehicle."""
+        source = self.tire_source()
+        if not source:
+            return None
+        with self.lock:
+            try:
+                if source == "ford":
+                    self._uds_target(0x726)
+                else:
+                    self.send("ATAT0")
+                    self.send("ATST32")
+                    self.send("ATSH" + self._legacy_header(0xA1))
+                rows = []
+                for wheel, did in zip(TIRE_WHEELS, TIRE_DIDS[source]):
+                    data = self.query_did(did)
+                    rows.append((wheel, tire_psi(source, data) if data else None))
+                return rows
+            finally:
+                self._uds_restore()
 
     def supported_pids(self):
         if self._supported is not None:

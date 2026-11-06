@@ -699,3 +699,60 @@ final class ELM327 {
         }
     }
 }
+
+// MARK: - Tire pressures (the Mac app's read_tire_pressures)
+
+/// Every maker does this its own way, so only commands with a real source are listed here. Ford: owner reports on
+/// several models. GM: an owner's report on a 2005-era Tahoe, matched to the dash; later GMs don't answer these.
+/// Nothing here has been checked against a tire gauge, and the app says so.
+enum TireData {
+    static let wheels = ["Left front", "Right front", "Right rear", "Left rear"]
+    static let fordNote = "From owner reports, not confirmed on your vehicle. Check against a tire gauge. Readings can lag by about 30 seconds, and wheel positions can be swapped after a tire rotation."
+    static let gmNote = "From one owner's report on a 2005-era Tahoe, where the numbers matched the dash. Not confirmed on your vehicle. Check against a tire gauge."
+    static let unsupported = "We don't have a reliable way to read tire pressures on this vehicle yet, so none are shown. If you haven't yet, pick your vehicle in Choose vehicle and try again. Any tire codes still show in Full scan."
+    static let noAnswer = "The vehicle didn't report tire pressures. Some models don't share them this way."
+
+    /// Decode one wheel. Missing or impossible values give nil, so a bad reading is never shown as real.
+    static func psi(ford: Bool, _ data: [UInt8]) -> Double? {
+        let value: Double
+        if ford {
+            guard data.count >= 2, data[0] != 0 || data[1] != 0 else { return nil }   // zeros mean no reading, not a flat tire
+            value = ((256 * Double(data[0]) + Double(data[1])) / 3 + 22.0 / 3) * 0.145
+        } else {
+            guard let a = data.first else { return nil }
+            value = Double(a)
+        }
+        return value >= 1 && value <= 90 ? value : nil
+    }
+}
+
+extension ELM327 {
+    func hasTireCommands(make: Make) -> Bool {
+        (make == .ford && isCAN && !is29Bit) || (make == .gm && protocolNumber == "2")
+    }
+
+    /// Read-only. Nil if we have no commands for this vehicle.
+    func tirePressures(make: Make) async throws -> [(String, Double?)]? {
+        guard hasTireCommands(make: make) else { return nil }
+        let ford = make == .ford
+        var rows: [(String, Double?)] = []
+        var failure: Error? = nil
+        do {
+            if ford {
+                try await udsTarget(0x726)
+            } else {
+                _ = try await link.command("ATAT0")
+                _ = try await link.command("ATST32")
+                _ = try await link.command("ATSH6CA1F1")
+            }
+            let dids: [UInt16] = ford ? [0x2813, 0x2814, 0x2815, 0x2816] : [0x248E, 0x248F, 0x2490, 0x2491]
+            for (wheel, did) in zip(TireData.wheels, dids) {
+                let data = try await readMode22(did)
+                rows.append((wheel, data.flatMap { TireData.psi(ford: ford, $0) }))
+            }
+        } catch { failure = error }
+        try await restore()
+        if let failure { throw failure }
+        return rows
+    }
+}

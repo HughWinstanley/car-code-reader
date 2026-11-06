@@ -286,6 +286,26 @@ extension Reader {
         runTest("Reading self-test results…") { [weak self] e in self?.selfTests = try await e.selfTests() }
     }
 
+    func readTires() {
+        testMessage = ""
+        if isDemo {
+            tires = [("Left front", 35), ("Right front", 35), ("Right rear", 34), ("Left rear", 31)]
+            tireNote = "Demo data, not a real vehicle."
+            return
+        }
+        let make = self.make
+        runTest("Reading tire pressures…") { [weak self] e in
+            let rows = try await e.tirePressures(make: make)
+            if let rows, rows.contains(where: { $0.1 != nil }) {
+                self?.tires = rows
+                self?.tireNote = make == .ford ? TireData.fordNote : TireData.gmNote
+            } else {
+                self?.tires = []
+                self?.tireNote = e.hasTireCommands(make: make) ? TireData.noAnswer : TireData.unsupported
+            }
+        }
+    }
+
     func readModuleInfo() {
         testMessage = ""
         if isDemo {
@@ -663,10 +683,17 @@ struct TestsView: View {
         return map.keys.sorted().map { ($0, map[$0]!.0, map[$0]!.1) }
     }
 
-    private func section<Body: View>(_ title: String, _ text: String, @ViewBuilder body: () -> Body) -> some View {
+    private func section<Body: View>(_ title: String, _ text: String, tireIcon: Bool = false, @ViewBuilder body: () -> Body) -> some View {
         RoundCard(radius: 20) {
             VStack(alignment: .leading, spacing: 8) {
-                proText(title, size: 16, bold: true)
+                if tireIcon {
+                    HStack(spacing: 12) {
+                        TireWarningIcon().frame(width: 50, height: 50)
+                        proText(title, size: 16, bold: true)
+                    }
+                } else {
+                    proText(title, size: 16, bold: true)
+                }
                 proText(text, muted: true)
                 body()
             }
@@ -687,7 +714,7 @@ struct TestsView: View {
 
     var body: some View {
         ProPage(title: "Tests", subtitle: "Deeper checks that professional scan tools do. They only read from the vehicle and never change anything.") {
-            if !reader.connected { proText("Connect to a vehicle to run the first three tests. Look up a code works without one.", muted: true) }
+            if !reader.connected { proText("Connect to a vehicle to run these tests. Look up a code works without one.", muted: true) }
             if reader.busy { BusyLine() }
             if !reader.testMessage.isEmpty { proText(reader.testMessage, muted: true) }
 
@@ -712,6 +739,18 @@ struct TestsView: View {
                                    text: t.passed ? MacColor.green : MacColor.red)
                     }
                 }
+            }
+
+            section("Tire pressures", "Reads each tire's pressure on vehicles where we know how: some Fords and older GM trucks. Not every vehicle shares this.", tireIcon: true) {
+                Button("Read pressures") { reader.readTires() }.buttonStyle(PillStyle(kind: .primary)).disabled(!ready)
+                ForEach(reader.tires, id: \.0) { row in
+                    HStack {
+                        proText(row.0)
+                        Spacer(minLength: 8)
+                        proText(row.1.map { String(format: "%.0f psi", $0) } ?? "No reading", bold: true)
+                    }
+                }
+                if !reader.tireNote.isEmpty { proText(reader.tireNote, muted: true, size: 12) }
             }
 
             section("Module info", "Software calibration numbers for each computer, and how often each self-test has had a chance to run.") {
@@ -741,6 +780,36 @@ struct TestsView: View {
             }
         }
         .navigationDestination(isPresented: $showCode) { CodeResultView(code: lookedUp) }
+    }
+}
+
+/// The low tire pressure warning light: a tire cut in half, open at the top, with an exclamation mark.
+struct TireWarningIcon: View {
+    var body: some View {
+        Canvas { ctx, size in
+            let s = min(size.width, size.height) / 1.44   // the disc is 1.44 times the drawing, like the Mac app's icons
+            let u = s / 10
+            let c = MacTint.engine
+            let mid = CGPoint(x: size.width / 2, y: size.height / 2)
+            ctx.fill(Path(ellipseIn: CGRect(origin: .zero, size: size)), with: .color(c.opacity(0.18)))
+            let y = mid.y - 0.5 * u
+            let r = 3.5 * u
+            var arc = Path()
+            arc.addArc(center: CGPoint(x: mid.x, y: y), radius: r, startAngle: .degrees(210), endAngle: .degrees(-30), clockwise: true)
+            ctx.stroke(arc, with: .color(c), lineWidth: s / 8)
+            for a in [60.0, 90.0, 120.0] {   // the tread along the bottom
+                let t = a * .pi / 180
+                var tooth = Path()
+                tooth.move(to: CGPoint(x: mid.x + (r + s / 8 * 0.3) * cos(t), y: y + (r + s / 8 * 0.3) * sin(t)))
+                tooth.addLine(to: CGPoint(x: mid.x + (r + 1.3 * u) * cos(t), y: y + (r + 1.3 * u) * sin(t)))
+                ctx.stroke(tooth, with: .color(c), lineWidth: s / 11)
+            }
+            let t = s / 26
+            ctx.fill(Path(CGRect(x: mid.x - t, y: y - 2.4 * u, width: t * 2, height: 3 * u)), with: .color(c))
+            let d = s / 18
+            ctx.fill(Path(ellipseIn: CGRect(x: mid.x - d, y: y + 1.5 * u - d, width: d * 2, height: d * 2)), with: .color(c))
+        }
+        .accessibilityHidden(true)
     }
 }
 

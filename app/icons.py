@@ -487,7 +487,24 @@ def _carbolt(cv, cx, cy, s, c):
     _bolt(cv, cx, cy - 0.6 * u, s * 0.5, hole)
 
 
-_MATCHED = {"battery": _battery, "gear": _gear, "folder": _folder, "download": _download, "tools": _tools,
+def _tire(cv, cx, cy, s, c):
+    """The low tire pressure warning light: a tire cut in half, open at the top, with an exclamation mark."""
+    u = s / 10
+    w = max(3, s / 8)
+    y = cy - 0.5 * u
+    r = 3.5 * u
+    cv.create_arc(cx - r, y - r, cx + r, y + r, start=150, extent=240, style="arc", outline=c, width=w)
+    for a in (-60, -90, -120):   # the tread along the bottom
+        t = math.radians(a)
+        x0, y0 = cx + r * math.cos(t), y - r * math.sin(t)  # starts inside the arc, so they always join
+        x1, y1 = cx + (r + 1.3 * u) * math.cos(t), y - (r + 1.3 * u) * math.sin(t)
+        cv.create_line(x0, y0, x1, y1, fill=c, width=max(2, s / 11))
+    _bar(cv, cx, y - 0.9 * u, s / 26, 1.5 * u, c)
+    d = max(1.5, s / 18)
+    cv.create_oval(cx - d, y + 1.5 * u - d, cx + d, y + 1.5 * u + d, fill=c, outline="")
+
+
+_MATCHED = {"tire": _tire, "battery": _battery, "gear": _gear, "folder": _folder, "download": _download, "tools": _tools,
             "checklist": _checklist, "carfront": _carfront, "cars": _cars, "fuel": _fuel, "brake": _brake,
             "bolt": _bolt, "wind": _wind, "thermo": _thermo, "carbolt": _carbolt}
 

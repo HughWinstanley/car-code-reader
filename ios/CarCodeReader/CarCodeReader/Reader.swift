@@ -81,6 +81,8 @@ final class Reader: ObservableObject {
     var tripTask: Task<Void, Never>?
     @Published var selfTests: [SelfTest] = []
     @Published var moduleInfo: [ModuleInfo] = []
+    @Published var tires: [(String, Double?)] = []
+    @Published var tireNote = ""
     @Published var freezeFrame: [(String, String)] = []
     @Published var freezeFrameRead = false
     @Published var testMessage = ""
@@ -208,7 +210,7 @@ final class Reader: ObservableObject {
     }
 
     private func clearPerVehicleResults() {
-        selfTests = []; moduleInfo = []; freezeFrame = []; freezeFrameRead = false; testMessage = ""
+        tires = []; tireNote = ""; selfTests = []; moduleInfo = []; freezeFrame = []; freezeFrameRead = false; testMessage = ""
         usedCarRows = []; usedCarHeadline = ""; usedCarWhy = ""; vinDetails = []; vinDetailsStatus = ""
         stopTrip(); trip = TripMeter()
         batteryRows = []; batteryPrompt = nil; batteryNote = ""

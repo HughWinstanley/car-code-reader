@@ -28,6 +28,7 @@ from tkinter.scrolledtext import ScrolledText
 from obd_core import (CONN_SERIAL, CONN_WIFI, CONN_DEMO, CONN_DEMO_OLD, CONN_DEMO_SEMI, ECU_NAMES, MS, PIDS,
                       EXTENDED, decode_readiness, format_pid, format_value, list_ports, make_from_vin, open_adapter, us_value,
                       year_from_vin)
+from obd_core import TIRE_NO_ANSWER, TIRE_NOTES, TIRE_UNSUPPORTED
 from dtc_database import TIRE_MODULE, is_tire_code, tire_status
 from dtc_database import (clean_code, decode_dtc_bytes, describe_dtc, search_codes, search_words, severity,
                           uds_status_text, why_it_matters)
@@ -653,6 +654,10 @@ class ProblemRow(RoundPanel):
             lbl.configure(wraplength=max(300, self.body.winfo_width() - 70))
         row = tk.Frame(self.details, bg=C["panel"])
         row.pack(fill="x", pady=(10, 0))
+        topic = service_guides.guided_topic(self.item["code"])
+        if topic:
+            PillButton(row, "Walk me through it", lambda: self.app.open_guided(topic, "Problems"), kind="primary").pack(
+                side="left", padx=(0, 10))
         PillButton(row, "Search for repair info", lambda: self.app.lookup_online(self.item["code"])).pack(side="left")
         PillButton(row, "Repair videos", lambda: self.app.lookup_online(self.item["code"], videos=True)).pack(
             side="left", padx=(10, 0))
@@ -853,6 +858,8 @@ class App:
             "Tests": self._build_tests(),
             "Service": self._build_service(),
             "Search": self._build_search(),
+            "Guided": self._build_guided(),
+            "Customize dashboard": self._build_customize(),
             "Used car": self._build_used_car(),
             "Trip": self._build_trip(),
             "Vehicle": self._build_vehicle(),
@@ -873,7 +880,8 @@ class App:
         if name == "Home":
             self.refresh_home()
         self.nav_selected = "Home" if name in ("Choose vehicle", "1995 and older", "Diagnostics", "Data manager",
-                                              "Settings") else "Service" if name == "Search" else name
+                                              "Settings") else "Service" if name in ("Search", "Guided") else \
+            "Live data" if name == "Customize dashboard" else name
         for n in self.nav:
             self._nav_draw(n)
         for n, frame in self.pages.items():
@@ -1088,6 +1096,10 @@ class App:
         if info.get("factory"):
             self._line(inner, f"{info['factory']} factory meaning. It can differ a little by model and year.",
                        color=C["muted"], size=12, pady=(0, 10))
+        topic = service_guides.guided_topic(code)
+        if topic:
+            PillButton(inner, "Walk me through it", lambda: self.open_guided(topic, "Search"), kind="primary").pack(
+                anchor="w", pady=(0, 12))
         if code.startswith("P"):
             self._line(card("Why it matters"), why_it_matters(code, "Stored", "Engine"))
         if info["causes"]:
@@ -2164,6 +2176,7 @@ class App:
         self.live_btn.pack(side="left")
         self.freeze_btn = PillButton(bar, "Show freeze frame", self.read_freeze_frame)
         self.freeze_btn.pack(side="left", padx=10)
+        PillButton(bar, "Customize dashboard", self.open_customize).pack(side="left")
         self.record_btn = PillButton(bar, "Record", self.toggle_record)
         self.record_btn.pack(side="left")
         self.record_btn.set_enabled(False)
@@ -2193,15 +2206,34 @@ class App:
                              ("Connect", self.open_live_connect))
 
     def _make_tiles(self, entries):
-        """entries: [(key, name)]"""
+        """entries: [(key, name)]. Your dashboard's readings come first, in your order."""
+        self.live_entries = list(entries)
         self.tiles_area.clear()
         self.graph_keys, self.live_stats, self.live_last = [], {}, {}
         self.graph.set_keys([], {})
         self.graph.pack_forget()
-        grid = tk.Frame(self.tiles_area.inner, bg=C["page"])
-        grid.pack(fill="x")
+        settings = _load_settings()
+        names = {name: pid for pid, name in entries}
+        pinned = [(names[n], n) for n in settings.get("dashboard", []) if n in names]
+        rest = [e for e in entries if e not in pinned]
+        only = bool(pinned) and settings.get("dashboard_only", False)
+        inner = self.tiles_area.inner
+
+        def new_grid(title, shown=True):
+            if title and shown:
+                self._line(inner, title, bold=True, size=16, pady=(0, 8))
+            grid = tk.Frame(inner, bg=C["page"])
+            if shown:  # hidden readings keep their tile, so recording and the low and high still work
+                grid.pack(fill="x")
+            for col in range(3):
+                grid.grid_columnconfigure(col, weight=1, uniform="tiles")
+            return grid
+
         self.tiles = {}
-        for i, (pid, name) in enumerate(entries):
+        groups = ([(new_grid("My dashboard"), pinned)] if pinned else []) + \
+            [(new_grid("Other readings" if pinned else "", shown=not only), rest)]
+        placed = [(g, i, e) for g, es in groups for i, e in enumerate(es)]
+        for grid, i, (pid, name) in placed:
             card = RoundPanel(grid, pad=(18, 14), radius=18)
             card.grid(row=i // 3, column=i % 3, sticky="nsew", padx=(0, 12), pady=(0, 12))
             tile = card.inner
@@ -2214,12 +2246,16 @@ class App:
             lbl.pack(fill="x")
             span = tk.Label(tile, text="", bg=C["panel"], fg=C["muted"], font=F(11), anchor="w")
             span.pack(fill="x")
-            self.tiles[pid] = (value, alt, span, card, name)
-            bind_click(card, lambda k=pid: self._toggle_graph(k), also=(tile, value, alt, lbl, span))
-            for w in (card, tile, value, alt, lbl, span):
+            normal = service_guides.normal_range(name)
+            note = tk.Label(tile, text=normal[0] if normal else "", bg=C["panel"], fg=C["muted"], font=F(11), anchor="w",
+                            justify="left", wraplength=220)
+            if normal:
+                note.pack(fill="x")
+            self.tiles[pid] = (value, alt, span, card, name, note)
+            bind_click(card, lambda k=pid: self._toggle_graph(k), also=(tile, value, alt, lbl, span, note))
+            for w in (card, tile, value, alt, lbl, span, note):
                 w.configure(cursor="hand2")
-        for col in range(3):
-            grid.grid_columnconfigure(col, weight=1, uniform="tiles")
+        self._line(inner, service_guides.NORMAL_NOTE, color=C["muted"], size=12, pady=(2, 0))
 
     def _set_tile(self, pid, text, value=None, unit=None):
         if pid not in self.tiles:
@@ -2234,6 +2270,11 @@ class App:
         st = self.live_stats.setdefault(pid, [v, v])
         st[0], st[1] = min(st[0], v), max(st[1], v)
         self.tiles[pid][2].configure(text=f"Low {_num(st[0])} · High {_num(st[1])} {u}")
+        normal = service_guides.normal_range(self.tiles[pid][4])
+        if normal:
+            off = service_guides.outside_normal(self.tiles[pid][4], v)
+            self.tiles[pid][5].configure(text=("Outside normal. " if off else "") + normal[0],
+                                         fg=TINT["engine"] if off else C["muted"], font=F(11, "bold" if off else "normal"))
         self.graph.add(pid, v, u)
 
     def _toggle_graph(self, key):
@@ -2718,6 +2759,10 @@ class App:
             "scan", "scan", "Self-test results and misfire counts",
             "The numbers behind each emissions self-test with its pass/fail limits, and misfire counts for each "
             "cylinder. Most 2008 and newer vehicles.", "Read results", self.read_self_tests)
+        self.tires_out, _ = section(
+            "tire", "engine", "Tire pressures",
+            "Reads each tire's pressure on vehicles where we know how: some Fords and older GM trucks. Not every "
+            "vehicle shares this.", "Read pressures", self.read_tires)
         self.mod9_out, _ = section(
             "vehicle", "vehicle", "Module info",
             "Software calibration numbers for each computer, and how often each self-test has had a chance to "
@@ -2840,6 +2885,24 @@ class App:
                            pady=(1, 0))
 
     # Module info (mode $09)
+    def read_tires(self):
+        elm = self.elm
+        if not elm:
+            return
+        source = elm.tire_source()
+
+        def done(rows):
+            out = self.tires_out
+            self._clear(out)
+            if rows is None or not any(psi for _w, psi in rows):
+                self._line(out, TIRE_NO_ANSWER if source else TIRE_UNSUPPORTED, color=C["muted"], pady=(12, 0))
+                return
+            for wheel, psi in rows:
+                self._line(out, f"{wheel}: " + (f"{psi:.0f} psi" if psi else "No reading"), pady=(8, 0))
+            self._line(out, TIRE_NOTES[source], color=C["muted"], size=12, pady=(10, 0))
+
+        self.run_bg(elm.read_tire_pressures, done, "Reading tire pressures…")
+
     def read_module_info(self):
         elm = self.elm
         if not elm:
@@ -3200,6 +3263,10 @@ class App:
             self.search_from_fix = self.search_from_page = None
             self._show_code_result(code)
 
+        def open_guided(key):
+            self.search_from_fix = self.search_from_page = None
+            self.open_guided(key, "Service")
+
         self._line(box, "Popular repairs", bold=True, size=16, pady=(0, 8))
         tile_grid(box, [(title, "", art(icon, key), lambda q=query: open_fix(q))
                         for title, query, icon, key in self.POPULAR_REPAIRS],
@@ -3212,6 +3279,130 @@ class App:
             bind_click(row, lambda c=code: open_code(c), also=(row.inner, label))
             for w in (row, row.inner, label):
                 w.configure(cursor="hand2")
+        self._line(box, "Step-by-step help", bold=True, size=16, pady=(14, 8))
+        for key, topic in service_guides.GUIDED.items():
+            row = RoundPanel(box, pad=(20, 10), radius=14)
+            row.pack(fill="x", pady=(0, 8))
+            label = self._line(row.inner, topic["title"], bold=True, pady=0)
+            bind_click(row, lambda k=key: open_guided(k), also=(row.inner, label))
+            for w in (row, row.inner, label):
+                w.configure(cursor="hand2")
+
+    # --- Step-by-step help: each answer leads to the next check ---------------------------------
+    def _build_guided(self):
+        page = tk.Frame(self.main, bg=C["page"])
+        LinkLabel(page, "Back", self._guided_back).pack(anchor="w", pady=(0, 6))
+        self.guided_title = tk.Label(page, text="", bg=C["page"], fg=C["ink"], font=F(22, "bold"), anchor="w")
+        self.guided_title.pack(fill="x")
+        self.guided_step = tk.Label(page, text="", bg=C["page"], fg=C["muted"], font=F(13), anchor="w")
+        self.guided_step.pack(fill="x", pady=(2, 10))
+        self.guided_area = ScrollArea(page, C["page"])
+        self.guided_area.pack(fill="both", expand=True)
+        self.guided_key, self.guided_path, self.guided_from = None, [], "Service"
+        return page
+
+    def open_guided(self, key, came_from):
+        self.guided_key, self.guided_path, self.guided_from = key, [service_guides.GUIDED[key]["start"]], came_from
+        self.show_page("Guided")
+        self._guided_fill()
+
+    def _guided_back(self):
+        if len(self.guided_path) > 1:
+            self.guided_path.pop()
+            self._guided_fill()
+        else:
+            self.show_page(self.guided_from)
+
+    def _guided_go(self, node):
+        self.guided_path.append(node)
+        self._guided_fill()
+
+    def _guided_fill(self):
+        self.guided_area.clear()
+        inner = self.guided_area.inner
+        topic = service_guides.GUIDED[self.guided_key]
+        node = topic["nodes"][self.guided_path[-1]]
+        self.guided_title.configure(text=topic["title"])
+        self.guided_step.configure(text=f"Step {len(self.guided_path)}" if node["options"] else "Result")
+        card = RoundPanel(inner, pad=(22, 16), radius=16)
+        card.pack(fill="x", pady=(0, 12))
+        self._line(card.inner, node["text"], size=15, pady=0)
+        for label_text, nxt in node["options"]:
+            row = RoundPanel(inner, pad=(20, 12), radius=14)
+            row.pack(fill="x", pady=(0, 8))
+            label = self._line(row.inner, label_text, bold=True, size=14, pady=0)
+            bind_click(row, lambda n=nxt: self._guided_go(n), also=(row.inner, label))
+            for w in (row, row.inner, label):
+                w.configure(cursor="hand2")
+        if not node["options"]:
+            self._web_links(inner, topic["title"], topic["title"].lower())
+            PillButton(inner, "Start over", lambda: self.open_guided(self.guided_key, self.guided_from)).pack(
+                anchor="w", pady=(4, 8))
+            self._line(inner, "This is general guidance. Confirm with a test before buying parts.", color=C["muted"], size=12)
+
+    # --- Customize dashboard --------------------------------------------------------------------
+    def _build_customize(self):
+        page = self._subpage("Customize dashboard", "Add the readings you care about. They show first on Live data, "
+                                                    "in this order.", back="Live data")
+        self.custom_area = ScrollArea(page, C["page"])
+        self.custom_area.pack(fill="both", expand=True)
+        return page
+
+    def open_customize(self):
+        self.show_page("Customize dashboard")
+        self._customize_fill()
+
+    def _customize_names(self):
+        entries = getattr(self, "live_entries", None)
+        return [n for _p, n in entries] if entries else [PIDS[p][0] for p in PIDS]
+
+    def _customize_save(self, pins, only=None):
+        _save_setting("dashboard", pins)
+        settings = _load_settings()
+        only = settings.get("dashboard_only", False) if only is None else only
+        _save_setting("dashboard_only", bool(only and pins))
+        self._customize_fill()
+        if getattr(self, "live_entries", None):
+            self._make_tiles(self.live_entries)
+
+    def _customize_fill(self):
+        self.custom_area.clear()
+        inner = self.custom_area.inner
+        settings = _load_settings()
+        names = self._customize_names()
+        pins = list(settings.get("dashboard", []))
+        only = settings.get("dashboard_only", False)
+        if pins:
+            PillButton(inner, "Show all readings" if only else "Only show my dashboard",
+                       lambda: self._customize_save(pins, not only)).pack(anchor="w", pady=(0, 12))
+            self._line(inner, "My dashboard", bold=True, size=16, pady=(0, 8))
+
+        def moved(i, j):
+            new = list(pins)
+            new[i], new[j] = new[j], new[i]
+            self._customize_save(new)
+
+        for i, name in enumerate(pins):
+            row = RoundPanel(inner, pad=(20, 8), radius=14)
+            row.pack(fill="x", pady=(0, 8))
+            line = tk.Frame(row.inner, bg=C["panel"])
+            line.pack(fill="x")
+            tk.Label(line, text=name, bg=C["panel"], fg=C["ink"], font=F(14), anchor="w").pack(side="left")
+            PillButton(line, "Remove", lambda n=name: self._customize_save([p for p in pins if p != n])).pack(side="right")
+            if i < len(pins) - 1:
+                PillButton(line, "Down", lambda k=i: moved(k, k + 1)).pack(side="right", padx=(0, 8))
+            if i > 0:
+                PillButton(line, "Up", lambda k=i: moved(k, k - 1)).pack(side="right", padx=(0, 8))
+        rest = [n for n in names if n not in pins]
+        if rest:
+            self._line(inner, "Add a reading", bold=True, size=16, pady=(8, 8))
+        for name in rest:
+            row = RoundPanel(inner, pad=(20, 8), radius=14)
+            row.pack(fill="x", pady=(0, 8))
+            line = tk.Frame(row.inner, bg=C["panel"])
+            line.pack(fill="x")
+            tk.Label(line, text=name, bg=C["panel"], fg=C["ink"], font=F(14), anchor="w").pack(side="left")
+            PillButton(line, "Add", lambda n=name: self._customize_save(pins + [n])).pack(side="right")
 
     def _service_card(self, parent, g):
         card = RoundPanel(parent, pad=(20, 14), radius=16)
