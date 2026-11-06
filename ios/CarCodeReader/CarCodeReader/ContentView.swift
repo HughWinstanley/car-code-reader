@@ -1,6 +1,26 @@
 import SwiftUI
 
-enum AppInfo { static let version = "2.15 — Nov 6" }
+enum AppInfo {
+    /// One version number for everything: this is what Xcode, Settings and Check for updates all see.
+    static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+}
+
+/// Follows the iPhone's text size setting, unlike a fixed .system(size:).
+private struct ScaledFont: ViewModifier {
+    @ScaledMetric private var size: CGFloat
+    private let weight: Font.Weight
+    init(_ size: CGFloat, _ weight: Font.Weight) {
+        _size = ScaledMetric(wrappedValue: size)
+        self.weight = weight
+    }
+    func body(content: Content) -> some View { content.font(.system(size: size, weight: weight)) }
+}
+
+extension View {
+    func scaledFont(_ size: CGFloat, weight: Font.Weight = .regular) -> some View {
+        modifier(ScaledFont(size, weight))
+    }
+}
 enum Tab: CaseIterable {
     case home, problems, live, smog, tests, service, usedCar, trip, vehicle, history, help, settings
 
@@ -152,7 +172,7 @@ struct PillStyle: ButtonStyle {
             }
         }
         return configuration.label
-            .font(.system(size: big ? 15 : 13, weight: .bold))
+            .scaledFont(big ? 15 : 13, weight: .bold)
             .foregroundStyle(text)
             .padding(.horizontal, big ? 20 : 15).padding(.vertical, big ? 12 : 7)
             .background(Capsule().fill(fill))
@@ -167,7 +187,7 @@ struct StatusPill: View {
     let fill: Color
     let text: Color
     var body: some View {
-        Text(words).font(.system(size: 12, weight: .bold)).foregroundStyle(text)
+        Text(words).scaledFont(12, weight: .bold).foregroundStyle(text)
             .lineLimit(1).fixedSize()
             .padding(.horizontal, 12).padding(.vertical, 5)
             .background(Capsule().fill(fill))
@@ -181,7 +201,7 @@ struct LinkLabel: View {
     init(_ title: String, action: @escaping () -> Void) { self.title = title; self.action = action }
     var body: some View {
         Button(action: action) {
-            Text(title).font(.system(size: 13, weight: .bold)).underline().foregroundStyle(MacColor.ink)
+            Text(title).scaledFont(13, weight: .bold).underline().foregroundStyle(MacColor.ink)
         }
         .buttonStyle(.plain)
     }
@@ -252,12 +272,12 @@ struct PageTitle: View {
     var icon: String? = nil
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
-            if let icon { Image(icon).resizable().scaledToFit().frame(width: 66, height: 66) }
+            if let icon { Image(icon).resizable().scaledToFit().frame(width: 66, height: 66).accessibilityHidden(true) }
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 24, weight: .bold)).foregroundStyle(MacColor.ink)
+                Text(title).scaledFont(24, weight: .bold).foregroundStyle(MacColor.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 if !subtitle.isEmpty {
-                    Text(subtitle).font(.system(size: 13)).foregroundStyle(MacColor.muted)
+                    Text(subtitle).scaledFont(13).foregroundStyle(MacColor.muted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -287,7 +307,7 @@ struct AppHeader: View {
     var body: some View {
         HStack(spacing: 10) {
             if !reader.chosenName.isEmpty {
-                Text(reader.chosenName).font(.system(size: 13, weight: .bold)).foregroundStyle(MacColor.ink)
+                Text(reader.chosenName).scaledFont(13, weight: .bold).foregroundStyle(MacColor.ink)
                     .lineLimit(1).minimumScaleFactor(0.8)
             }
             Spacer(minLength: 8)
@@ -330,10 +350,10 @@ struct TileCard<Art: View>: View {
     var body: some View {
         VStack(spacing: 6) {
             art.frame(height: 72)
-            Text(title).font(.system(size: 15, weight: .bold)).foregroundStyle(MacColor.ink)
+            Text(title).scaledFont(15, weight: .bold).foregroundStyle(MacColor.ink)
                 .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
             if !subtitle.isEmpty {
-                Text(subtitle).font(.system(size: 12)).foregroundStyle(MacColor.muted)
+                Text(subtitle).scaledFont(12).foregroundStyle(MacColor.muted)
                     .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -380,10 +400,10 @@ struct EmptyStateCard: View {
     var body: some View {
         RoundCard(radius: 22) {
             HStack(alignment: .center, spacing: 14) {
-                Image(icon).resizable().scaledToFit().frame(width: 66, height: 66)
+                Image(icon).resizable().scaledToFit().frame(width: 66, height: 66).accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 16, weight: .bold)).foregroundStyle(MacColor.ink)
-                    Text(message).font(.system(size: 13)).foregroundStyle(MacColor.muted)
+                    Text(title).scaledFont(16, weight: .bold).foregroundStyle(MacColor.ink)
+                    Text(message).scaledFont(13).foregroundStyle(MacColor.muted)
                         .fixedSize(horizontal: false, vertical: true)
                     if reader.busy {
                         BusyLine().padding(.top, 8)
@@ -393,9 +413,22 @@ struct EmptyStateCard: View {
                     }
                 }
             }
-            if !reader.busy && !reader.connected && reader.status != "Not connected" {
-                Text(reader.status).font(.system(size: 12)).foregroundStyle(MacColor.muted)
-                    .fixedSize(horizontal: false, vertical: true).padding(.top, 10)
+            if !reader.busy && !reader.connected, let message = reader.errorMessage {
+                ErrorNote(message: message).padding(.top, 10)
+            }
+        }
+    }
+}
+
+/// A problem the user can act on, the same everywhere in the app.
+struct ErrorNote: View {
+    let message: String
+    var body: some View {
+        RoundCard(radius: 14, fill: MacColor.amberSoft, outline: MacColor.amberSoft, padX: 14, padY: 10) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(MacColor.amberInk).accessibilityHidden(true)
+                Text(message).scaledFont(13).foregroundStyle(MacColor.ink)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -407,7 +440,7 @@ struct BusyLine: View {
     var body: some View {
         HStack(spacing: 8) {
             ProgressView()
-            Text(reader.status).font(.system(size: 12)).foregroundStyle(MacColor.muted)
+            Text(reader.status).scaledFont(12).foregroundStyle(MacColor.muted)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -421,12 +454,22 @@ struct ContentView: View {
     @State private var visited: Set<Tab> = [.home]
     @AppStorage("appearance") private var appearance: Appearance = .automatic
     @AppStorage("layout") private var layout: AppLayout = .tabs
+    @AppStorage("welcomeDone") private var welcomeDone = false
 
     var body: some View {
         Group {
             if layout == .original { originalTabs } else { scrollingTabs }
         }
         .preferredColorScheme(appearance.scheme)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)   // past this the tiles stop being readable
+        .fullScreenCover(isPresented: Binding(get: { !welcomeDone }, set: { welcomeDone = !$0 })) {
+            WelcomeView { demo in
+                welcomeDone = true
+                if demo { reader.loadDemo(); selection = .problems; visited.insert(.problems) }
+            }
+            .environmentObject(reader)
+            .preferredColorScheme(appearance.scheme)
+        }
         .onChange(of: selection) { visited.insert($0) }
     }
 
@@ -483,6 +526,8 @@ struct ContentView: View {
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel(tab.title)
+                            .accessibilityAddTraits(selection == tab ? .isSelected : [])
                             .id(tab)
                         }
                     }
@@ -516,13 +561,14 @@ struct HomeTab: View {
             ZStack {
                 Circle().fill(tint.opacity(0.18)).frame(width: 66, height: 66)
                 Image(systemName: symbol).font(.system(size: 28, weight: .semibold)).foregroundStyle(tint)
+                    .accessibilityHidden(true)
             }
         }
     }
 
     private func tile(_ title: String, _ subtitle: String, _ icon: String) -> some View {
         TileCard(title: title, subtitle: subtitle) {
-            Image(icon).resizable().scaledToFit().frame(height: 72)
+            Image(icon).resizable().scaledToFit().frame(height: 72).accessibilityHidden(true)
         }
     }
 
@@ -610,9 +656,9 @@ struct HomeTab: View {
         VStack(alignment: .leading, spacing: 10) {
             if reader.isDemo {
                 RoundCard(fill: MacColor.amberSoft, outline: MacColor.amberSoft, padY: 12) {
-                    Text("Demo mode: sample data, not a real car").font(.system(size: 14, weight: .bold))
+                    Text("Demo mode: sample data, not a real car").scaledFont(14, weight: .bold)
                         .foregroundStyle(MacColor.ink)
-                    Text("Close and reopen the app to clear it.").font(.system(size: 13))
+                    Text("Close and reopen the app to clear it.").scaledFont(13)
                         .foregroundStyle(MacColor.ink)
                 }
             }
@@ -620,9 +666,9 @@ struct HomeTab: View {
                 HStack(spacing: 14) {
                     if !reader.chosenMake.isEmpty { MakeBadge(make: reader.chosenMake, size: 56) }
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(reader.chosenName).font(.system(size: 17, weight: .bold)).foregroundStyle(MacColor.ink)
+                        Text(reader.chosenName).scaledFont(17, weight: .bold).foregroundStyle(MacColor.ink)
                         HStack(spacing: 10) {
-                            Text(VehicleData.supportText(make: reader.chosenMake, year: reader.year)).font(.system(size: 13))
+                            Text(VehicleData.supportText(make: reader.chosenMake, year: reader.year)).scaledFont(13)
                                 .foregroundStyle(MacColor.muted)
                             LinkLabel("Change") { showPicker = true }
                         }
@@ -671,6 +717,7 @@ struct Lamp: View {
             }
         }
         .frame(width: size, height: size)
+        .accessibilityHidden(true)   // the headline next to it says the same thing in words
     }
 
     private func light(glow: Bool) -> some View {
@@ -708,17 +755,20 @@ struct ProblemCard: View {
                         Circle().fill(level.dot).frame(width: 8, height: 8)
                     }
                     .padding(.top, 2)
-                    Text(problem.meaning).font(.system(size: 15, weight: .bold)).foregroundStyle(MacColor.ink)
+                    Text(problem.meaning).scaledFont(15, weight: .bold).foregroundStyle(MacColor.ink)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 4)
                     StatusPill(words: level.words, fill: level.pillFill, text: level.pillText)
                 }
                 Text("\(problem.module), code \(problem.code). \(statusWords).")
-                    .font(.system(size: 12)).foregroundStyle(MacColor.muted)
+                    .scaledFont(12).foregroundStyle(MacColor.muted)
                     .padding(.leading, 26)
             }
             .contentShape(Rectangle())
             .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { open.toggle() } }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint(open ? "Hides the details" : "Shows what it means and what usually fixes it")
 
             if open { details.padding(.leading, 26).padding(.top, 10) }
         }
@@ -732,11 +782,11 @@ struct ProblemCard: View {
             let steps = CodeDetail.checkSteps(problem.code, make: reader.make)
             if !steps.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("How to check it").font(.system(size: 13, weight: .bold)).foregroundStyle(MacColor.ink)
+                    Text("How to check it").scaledFont(13, weight: .bold).foregroundStyle(MacColor.ink)
                     ForEach(Array(steps.enumerated()), id: \.offset) { i, s in
                         HStack(alignment: .top, spacing: 10) {
                             StepDot(number: i + 1, fill: MacTint.vehicle.opacity(0.15), text: Color(light: "#1F6FD1", dark: "#7DB3F2"))
-                            Text(s).font(.system(size: 13)).foregroundStyle(MacColor.ink)
+                            Text(s).scaledFont(13).foregroundStyle(MacColor.ink)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
@@ -757,8 +807,8 @@ struct ProblemCard: View {
     @ViewBuilder private func section(_ heading: String, _ text: String) -> some View {
         if !text.isEmpty {
             VStack(alignment: .leading, spacing: 2) {
-                Text(heading).font(.system(size: 13, weight: .bold)).foregroundStyle(MacColor.ink)
-                Text(text).font(.system(size: 13)).foregroundStyle(MacColor.ink)
+                Text(heading).scaledFont(13, weight: .bold).foregroundStyle(MacColor.ink)
+                Text(text).scaledFont(13).foregroundStyle(MacColor.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -866,7 +916,7 @@ struct ProblemsTab: View {
                     }
                     if !reader.problems.isEmpty {
                         Text("Swipe a code left to clear it from this list. Note: a car can only erase all codes at once (the Clear codes button) — one-at-a-time erasing isn't something the OBD port supports.")
-                            .font(.system(size: 12)).foregroundStyle(MacColor.muted)
+                            .scaledFont(12).foregroundStyle(MacColor.muted)
                             .macRow()
                     }
                     if reader.scanned && reader.scanKind != .engine { modulesNote.macRow() }
@@ -888,13 +938,13 @@ struct ProblemsTab: View {
             HStack(alignment: .top, spacing: 14) {
                 Lamp(mode: lamp)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(headline).font(.system(size: 24, weight: .bold)).foregroundStyle(MacColor.ink)
+                    Text(headline).scaledFont(24, weight: .bold).foregroundStyle(MacColor.ink)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(subline).font(.system(size: 14)).foregroundStyle(MacColor.muted)
+                    Text(subline).scaledFont(14).foregroundStyle(MacColor.muted)
                         .fixedSize(horizontal: false, vertical: true)
                     if reader.scanned, let when = reader.lastScanAt {
                         Text("Last scanned \(when.formatted(date: .omitted, time: .standard))")
-                            .font(.system(size: 12)).foregroundStyle(MacColor.muted).padding(.top, 1)
+                            .scaledFont(12).foregroundStyle(MacColor.muted).padding(.top, 1)
                     }
                 }
             }
@@ -923,10 +973,11 @@ struct ProblemsTab: View {
                 }
             }
 
+            if let message = reader.errorMessage { ErrorNote(message: message) }
             if reader.busy {
                 BusyLine()
-            } else if reader.status != "Not connected" {
-                Text(reader.status).font(.system(size: 12)).foregroundStyle(MacColor.muted)
+            } else if reader.status != "Not connected" && !reader.status.isEmpty {
+                Text(reader.status).scaledFont(12).foregroundStyle(MacColor.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -944,11 +995,11 @@ struct ProblemsTab: View {
                     Text("This vehicle's protocol only lets us read engine and transmission codes (\(reader.protocolName)).")
                 }
             }
-            .font(.system(size: 12)).foregroundStyle(MacColor.muted)
+            .scaledFont(12).foregroundStyle(MacColor.muted)
             .fixedSize(horizontal: false, vertical: true)
             if reader.canScanModules {
                 Text("Missing a module, like ABS or airbag? A deep scan checks every address and takes 1 to 3 minutes.")
-                    .font(.system(size: 12)).foregroundStyle(MacColor.muted)
+                    .scaledFont(12).foregroundStyle(MacColor.muted)
                     .fixedSize(horizontal: false, vertical: true)
                 LinkLabel("Run a deep scan") { reader.scan(deep: true) }.disabled(reader.busy)
             }
@@ -958,13 +1009,13 @@ struct ProblemsTab: View {
     private var connectPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
             RoundCard(padX: 20, padY: 16) {
-                Text("No adapter yet?").font(.system(size: 15, weight: .bold)).foregroundStyle(MacColor.ink)
-                Text("Try everything with a pretend vehicle:").font(.system(size: 13)).foregroundStyle(MacColor.muted)
+                Text("No adapter yet?").scaledFont(15, weight: .bold).foregroundStyle(MacColor.ink)
+                Text("Try everything with a pretend vehicle:").scaledFont(13).foregroundStyle(MacColor.muted)
                     .padding(.top, 4).padding(.bottom, 6)
                 LinkLabel("See a demo (sample data)") { reader.loadDemo() }
             }
             Text(reader.useBluetooth ? (reader.bleAdapterName.isEmpty ? "Using Bluetooth. No adapter chosen yet." : "Using Bluetooth: \(reader.bleAdapterName).") : "Using Wi-Fi \(reader.host):\(reader.port).")
-                .font(.system(size: 12)).foregroundStyle(MacColor.muted)
+                .scaledFont(12).foregroundStyle(MacColor.muted)
             LinkLabel("Connection options") { selection = .settings }
         }
     }
@@ -1010,10 +1061,13 @@ struct LiveTab: View {
                                            message: "Tap Start live data to watch speed, RPM, temperatures and more, updated every second.",
                                            buttonTitle: "Start live data") { reader.toggleLive() }
                         } else {
-                            Text("Tap any reading to graph it").font(.system(size: 12)).foregroundStyle(MacColor.muted)
+                            Text("Tap any reading to graph it").scaledFont(12).foregroundStyle(MacColor.muted)
                             TileGrid(items: reader.live.map(\.name)) { name in
                                 if let r = reader.live.first(where: { $0.name == name }) {
                                     readingTile(r).onTapGesture { reader.toggleGraph(name) }
+                                        .accessibilityElement(children: .combine)
+                                        .accessibilityAddTraits(.isButton)
+                                        .accessibilityHint(reader.graphKeys.contains(name) ? "Removes it from the graph" : "Adds it to the graph")
                                 }
                             }
                         }
@@ -1030,18 +1084,18 @@ struct LiveTab: View {
     private var freezeFrameCard: some View {
         RoundCard {
             VStack(alignment: .leading, spacing: 5) {
-                Text("Freeze frame").font(.system(size: 15, weight: .bold)).foregroundStyle(MacColor.ink)
+                Text("Freeze frame").scaledFont(15, weight: .bold).foregroundStyle(MacColor.ink)
                 if reader.freezeFrame.isEmpty {
                     Text("No snapshot stored. One is saved when the check-engine light comes on.")
-                        .font(.system(size: 13)).foregroundStyle(MacColor.muted)
+                        .scaledFont(13).foregroundStyle(MacColor.muted)
                 } else {
                     Text("A snapshot of the engine at the moment the check-engine light came on.")
-                        .font(.system(size: 12)).foregroundStyle(MacColor.muted)
+                        .scaledFont(12).foregroundStyle(MacColor.muted)
                     ForEach(reader.freezeFrame, id: \.0) { row in
                         HStack(alignment: .top) {
-                            Text(row.0).font(.system(size: 13)).foregroundStyle(MacColor.ink)
+                            Text(row.0).scaledFont(13).foregroundStyle(MacColor.ink)
                             Spacer(minLength: 8)
-                            Text(row.1).font(.system(size: 13, weight: .bold)).foregroundStyle(MacColor.ink)
+                            Text(row.1).scaledFont(13, weight: .bold).foregroundStyle(MacColor.ink)
                         }
                     }
                 }
@@ -1056,9 +1110,9 @@ struct LiveTab: View {
             ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
                 if i > 0 { Rectangle().fill(MacColor.line).frame(height: 1) }
                 HStack(alignment: .top) {
-                    Text(row.0).font(.system(size: 13)).foregroundStyle(MacColor.muted)
+                    Text(row.0).scaledFont(13).foregroundStyle(MacColor.muted)
                     Spacer(minLength: 12)
-                    Text(row.1.isEmpty ? "—" : row.1).font(.system(size: 13, weight: .bold))
+                    Text(row.1.isEmpty ? "—" : row.1).scaledFont(13, weight: .bold)
                         .foregroundStyle(MacColor.ink).multilineTextAlignment(.trailing)
                 }
                 .padding(.vertical, 8)
@@ -1071,14 +1125,14 @@ struct LiveTab: View {
         let parts = r.value.split(separator: "(", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
         let alt = parts.count > 1 ? parts[1].replacingOccurrences(of: ")", with: "") : ""
         return VStack(alignment: .leading, spacing: 1) {
-            Text(parts.first ?? r.value).font(.system(size: 24, weight: .bold)).foregroundStyle(MacColor.ink)
+            Text(parts.first ?? r.value).scaledFont(24, weight: .bold).foregroundStyle(MacColor.ink)
                 .lineLimit(1).minimumScaleFactor(0.6)
-            if !alt.isEmpty { Text(alt).font(.system(size: 12)).foregroundStyle(MacColor.muted) }
-            Text(r.name).font(.system(size: 13)).foregroundStyle(MacColor.ink)
+            if !alt.isEmpty { Text(alt).scaledFont(12).foregroundStyle(MacColor.muted) }
+            Text(r.name).scaledFont(13).foregroundStyle(MacColor.ink)
                 .fixedSize(horizontal: false, vertical: true).padding(.top, 1)
             if let stats = reader.liveStats[r.name] {
                 Text(String(format: "Low %g · High %g %@", (stats.0 * 10).rounded() / 10, (stats.1 * 10).rounded() / 10, r.unit))
-                    .font(.system(size: 11)).foregroundStyle(MacColor.muted).lineLimit(1).minimumScaleFactor(0.7)
+                    .scaledFont(11).foregroundStyle(MacColor.muted).lineLimit(1).minimumScaleFactor(0.7)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -1133,9 +1187,9 @@ struct SmogTab: View {
                                        message: "Tap Check again to read the vehicle's self-tests.", buttonTitle: nil)
                     } else {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(reader.smogText).font(.system(size: 20, weight: .bold)).foregroundStyle(verdictColor)
+                            Text(reader.smogText).scaledFont(20, weight: .bold).foregroundStyle(verdictColor)
                                 .fixedSize(horizontal: false, vertical: true)
-                            Text(reader.smogDetail).font(.system(size: 13)).foregroundStyle(MacColor.ink)
+                            Text(reader.smogDetail).scaledFont(13).foregroundStyle(MacColor.ink)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         monitorCard
@@ -1159,7 +1213,7 @@ struct SmogTab: View {
         let name = ["Comprehensive components": "General sensors and parts", "Misfire": "Misfire detection"][m.name] ?? m.name
         return VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(name).font(.system(size: 14)).foregroundStyle(m.supported ? MacColor.ink : MacColor.muted)
+                Text(name).scaledFont(14).foregroundStyle(m.supported ? MacColor.ink : MacColor.muted)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
                 if !m.supported {
@@ -1171,7 +1225,7 @@ struct SmogTab: View {
                 }
             }
             if m.supported && m.incomplete, let tip = Self.driveCycles[m.name] {
-                Text("How to finish it: " + tip).font(.system(size: 12)).foregroundStyle(MacColor.muted)
+                Text("How to finish it: " + tip).scaledFont(12).foregroundStyle(MacColor.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -1231,7 +1285,7 @@ struct SettingsTab: View {
     private var updatesCard: some View {
         RoundCard(padX: 20, padY: 16) {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Version \(AppInfo.version)").font(.system(size: 15, weight: .bold)).foregroundStyle(MacColor.ink)
+                Text("Version \(AppInfo.version)").scaledFont(15, weight: .bold).foregroundStyle(MacColor.ink)
                 if checking {
                     HStack(spacing: 8) {
                         ProgressView()
@@ -1242,7 +1296,7 @@ struct SettingsTab: View {
                 }
                 if !updateMessage.isEmpty { note(updateMessage) }
                 if let available {
-                    Text("Version \(available.version) is available.").font(.system(size: 14, weight: .bold))
+                    Text("Version \(available.version) is available.").scaledFont(14, weight: .bold)
                         .foregroundStyle(MacColor.ink)
                     if let notes = available.notes, !notes.isEmpty { note(notes) }
                     if let link = available.url, let url = URL(string: link) {
@@ -1256,17 +1310,17 @@ struct SettingsTab: View {
     }
 
     private func heading(_ text: String) -> some View {
-        Text(text).font(.system(size: 15, weight: .bold)).foregroundStyle(MacColor.ink)
+        Text(text).scaledFont(15, weight: .bold).foregroundStyle(MacColor.ink)
     }
     private func note(_ text: String) -> some View {
-        Text(text).font(.system(size: 12)).foregroundStyle(MacColor.muted)
+        Text(text).scaledFont(12).foregroundStyle(MacColor.muted)
             .fixedSize(horizontal: false, vertical: true)
     }
     private func field(_ label: String, _ placeholder: String, _ text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label).font(.system(size: 13, weight: .bold)).foregroundStyle(MacColor.ink)
+            Text(label).scaledFont(13, weight: .bold).foregroundStyle(MacColor.ink)
             TextField(placeholder, text: text)
-                .font(.system(size: 14)).autocorrectionDisabled().textInputAutocapitalization(.never)
+                .scaledFont(14).autocorrectionDisabled().textInputAutocapitalization(.never)
                 .padding(.horizontal, 12).padding(.vertical, 9)
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(MacColor.line, lineWidth: 1))
         }
@@ -1304,14 +1358,16 @@ struct SettingsTab: View {
                         VStack(alignment: .leading, spacing: 10) {
                             heading("How the adapter connects")
                             Toggle("Use Bluetooth adapter", isOn: $reader.useBluetooth)
-                                .font(.system(size: 14)).tint(MacColor.green)
+                                .scaledFont(14).tint(MacColor.green)
                             if reader.useBluetooth {
                                 BLEPicker()
                             } else {
                                 field("Wi-Fi address", "192.168.0.10", $reader.host)
                                 field("Port", "35000", $reader.port).keyboardType(.numberPad)
                             }
-                            note("Wi-Fi adapters make their own Wi-Fi network — join it in the iPhone's Settings first. The OBDLink MX+ (classic Bluetooth) isn't supported here; use a Wi-Fi or BLE adapter.")
+                            note(reader.useBluetooth
+                                 ? "This needs a Bluetooth Low Energy adapter. The OBDLink MX+ uses classic Bluetooth, which iPhones can't use here."
+                                 : "Wi-Fi adapters make their own Wi-Fi network. Join it in the iPhone's Settings first.")
                         }
                     }
 

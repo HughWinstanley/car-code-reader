@@ -637,7 +637,7 @@ struct ProPage<Content: View>: View {
 }
 
 private func proText(_ text: String, muted: Bool = false, size: CGFloat = 13, bold: Bool = false) -> some View {
-    Text(text).font(.system(size: size, weight: bold ? .bold : .regular))
+    Text(text).scaledFont(size, weight: bold ? .bold : .regular)
         .foregroundStyle(muted ? MacColor.muted : MacColor.ink)
         .fixedSize(horizontal: false, vertical: true)
 }
@@ -694,7 +694,7 @@ struct TestsView: View {
                             proText(r.value, size: 16, bold: true)
                         }
                         Spacer(minLength: 8)
-                        Text(r.verdict).font(.system(size: 12, weight: .bold))
+                        Text(r.verdict).scaledFont(12, weight: .bold)
                             .foregroundStyle(r.good ? MacColor.green : MacColor.red)
                             .multilineTextAlignment(.trailing)
                     }
@@ -742,7 +742,7 @@ struct TestsView: View {
             section("Look up a code", "Find out what any code means, without the vehicle. Factory meanings use the vehicle you picked.") {
                 HStack(spacing: 10) {
                     TextField("P0301", text: $codeEntry)
-                        .font(.system(size: 15)).textInputAutocapitalization(.characters).autocorrectionDisabled()
+                        .scaledFont(15).textInputAutocapitalization(.characters).autocorrectionDisabled()
                         .submitLabel(.search).onSubmit { lookup() }
                         .padding(.horizontal, 12).padding(.vertical, 8)
                         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(MacColor.line, lineWidth: 1))
@@ -796,6 +796,8 @@ struct ServiceView: View {
                     }
                     .contentShape(Rectangle())
                     .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { open = open == g.title ? nil : g.title } }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isButton)
                 }
             }
         }
@@ -816,7 +818,7 @@ struct VehiclePageView: View {
                     HStack(alignment: .top) {
                         proText(row.0, muted: true)
                         Spacer(minLength: 12)
-                        Text(row.1.isEmpty ? "—" : row.1).font(.system(size: 13, weight: .bold)).foregroundStyle(MacColor.ink).multilineTextAlignment(.trailing)
+                        Text(row.1.isEmpty ? "—" : row.1).scaledFont(13, weight: .bold).foregroundStyle(MacColor.ink).multilineTextAlignment(.trailing)
                     }
                     .padding(.vertical, 7)
                 }
@@ -824,7 +826,7 @@ struct VehiclePageView: View {
             Button("VIN details") { reader.lookUpVin() }.buttonStyle(PillStyle())
             if !reader.vinDetailsStatus.isEmpty { proText(reader.vinDetailsStatus, muted: true) }
             ForEach(reader.vinDetails, id: \.0) { row in
-                Text("\(row.0): \(row.1)").font(.system(size: 13)).foregroundStyle(row.0 == "Warning" ? MacColor.red : MacColor.ink)
+                Text("\(row.0): \(row.1)").scaledFont(13).foregroundStyle(row.0 == "Warning" ? MacColor.red : MacColor.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
             RoundCard(radius: 20) {
@@ -894,8 +896,8 @@ struct HistoryView: View {
                             if i + 1 < group.scans.count {
                                 let now = Set(scan.codes.map(\.code)), before = Set(group.scans[i + 1].codes.map(\.code))
                                 let new = now.subtracting(before).sorted(), gone = before.subtracting(now).sorted()
-                                if !new.isEmpty { Text("New since the scan before: " + new.joined(separator: ", ")).font(.system(size: 12)).foregroundStyle(MacColor.amberInk) }
-                                if !gone.isEmpty { Text("Gone since the scan before: " + gone.joined(separator: ", ")).font(.system(size: 12)).foregroundStyle(MacColor.green) }
+                                if !new.isEmpty { Text("New since the scan before: " + new.joined(separator: ", ")).scaledFont(12).foregroundStyle(MacColor.amberInk) }
+                                if !gone.isEmpty { Text("Gone since the scan before: " + gone.joined(separator: ", ")).scaledFont(12).foregroundStyle(MacColor.green) }
                             }
                             ForEach(Array(scan.codes.prefix(12).enumerated()), id: \.offset) { _, c in
                                 proText("\(c.code)  \(c.text)  (\(c.module))", size: 12)
@@ -920,6 +922,7 @@ struct HistoryView: View {
 struct HelpView: View {
     @EnvironmentObject var reader: Reader
     @State private var showLog = false
+    @AppStorage("welcomeDone") private var welcomeDone = true
     private let steps = [
         "Plug the adapter into the OBD port under the dashboard, near the steering column.",
         "Turn the key to ON. The engine can be off or running.",
@@ -950,6 +953,7 @@ struct HelpView: View {
                 Button(showLog ? "Hide adapter log" : "Show adapter log") { showLog.toggle() }.buttonStyle(PillStyle())
                 Button("Copy log") { UIPasteboard.general.string = reader.adapterLog.joined(separator: "\n") }.buttonStyle(PillStyle())
             }
+            LinkLabel("Show the welcome screen") { welcomeDone = false }
             if showLog {
                 Text(reader.adapterLog.isEmpty ? "Nothing yet. Connect to an adapter first." : reader.adapterLog.suffix(300).joined(separator: "\n"))
                     .font(.system(size: 11, design: .monospaced)).foregroundStyle(MacColor.ink)
@@ -989,14 +993,14 @@ struct UsedCarView: View {
             if reader.busy { BusyLine() }
             if !reader.testMessage.isEmpty { proText(reader.testMessage, muted: true) }
             if !reader.usedCarRows.isEmpty {
-                Text(reader.usedCarHeadline).font(.system(size: 20, weight: .bold)).foregroundStyle(headlineColor)
+                Text(reader.usedCarHeadline).scaledFont(20, weight: .bold).foregroundStyle(headlineColor)
                 proText(reader.usedCarWhy)
                 ForEach(reader.usedCarRows) { row in
                     RoundCard(radius: 16, padY: 12) {
                         VStack(alignment: .leading, spacing: 3) {
                             proText(row.label, muted: true, size: 12)
                             proText(row.value, size: 15, bold: true)
-                            Text(row.words).font(.system(size: 12, weight: .bold)).foregroundStyle(colors(row.level).1)
+                            Text(row.words).scaledFont(12, weight: .bold).foregroundStyle(colors(row.level).1)
                                 .padding(.horizontal, 10).padding(.vertical, 3)
                                 .background(Capsule().fill(colors(row.level).0))
                                 .fixedSize(horizontal: false, vertical: true)
@@ -1032,7 +1036,7 @@ struct TripView: View {
                 EmptyStateCard(icon: "icon-gauge", title: "Not connected yet", message: "Connect to the vehicle to start a trip.")
             }
             Text("Have a passenger watch this. Only try the 0-60 timer on a closed course.")
-                .font(.system(size: 13)).foregroundStyle(MacColor.amberInk).fixedSize(horizontal: false, vertical: true)
+                .scaledFont(13).foregroundStyle(MacColor.amberInk).fixedSize(horizontal: false, vertical: true)
             card(text(reader.trip.instantMpg, "%.1f mpg"), "Right now")
             card(text(reader.trip.averageMpg, "%.1f mpg"), "Trip average")
             card(String(format: "%.2f miles", reader.trip.miles), "Trip distance")
@@ -1040,6 +1044,47 @@ struct TripView: View {
             card(text(reader.trip.last060, "%.1f s"), "Last 0-60")
             card(text(reader.trip.best060, "%.1f s"), "Best 0-60")
         }
+    }
+}
+
+// MARK: - First launch
+
+struct WelcomeView: View {
+    let done: (_ demo: Bool) -> Void
+    private let steps = ["Get an OBD-II adapter that uses Wi-Fi or Bluetooth Low Energy.",
+                         "Plug it in under the dashboard and turn the key to ON.",
+                         "Tap a check on Home. The app explains what it finds in plain language."]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Image("app-logo").resizable().scaledToFit().frame(width: 84, height: 84)
+                    .clipShape(RoundedRectangle(cornerRadius: 19, style: .continuous))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Car Code Reader").scaledFont(30, weight: .bold).foregroundStyle(MacColor.ink)
+                    proText("Find out why a warning light is on, and what usually fixes it.", muted: true, size: 16)
+                }
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(Array(steps.enumerated()), id: \.offset) { i, step in
+                        HStack(alignment: .top, spacing: 12) {
+                            StepDot(number: i + 1, size: 30)
+                            proText(step, size: 15)
+                        }
+                    }
+                }
+                proText("Results are guidance, not a repair diagnosis. Confirm with a test before buying parts, and take brake or airbag problems to a mechanic.", muted: true)
+                VStack(spacing: 10) {
+                    Button { done(false) } label: { Text("Get started").frame(maxWidth: .infinity) }
+                        .buttonStyle(PillStyle(kind: .primary, big: true))
+                    Button { done(true) } label: { Text("Try the demo").frame(maxWidth: .infinity) }
+                        .buttonStyle(PillStyle(big: true))
+                }
+                .padding(.top, 4)
+            }
+            .padding(24)
+        }
+        .background(MacColor.page)
     }
 }
 
@@ -1056,7 +1101,7 @@ struct BLEPicker: View {
             scanner.stop()
         } label: {
             HStack {
-                Text(device.name).font(.system(size: 14)).foregroundStyle(MacColor.ink)
+                Text(device.name).scaledFont(14).foregroundStyle(MacColor.ink)
                 Spacer(minLength: 8)
                 if reader.bleAdapterID == device.id {
                     StatusPill(words: "Chosen", fill: MacColor.greenSoft, text: MacColor.green)
@@ -1123,9 +1168,9 @@ struct LiveGraphCard: View {
                 ForEach(Array(reader.graphKeys.enumerated()), id: \.element) { i, name in
                     HStack(spacing: 6) {
                         Circle().fill(colors[i % colors.count]).frame(width: 8, height: 8)
-                        Text(name).font(.system(size: 12)).foregroundStyle(MacColor.ink).lineLimit(1)
+                        Text(name).scaledFont(12).foregroundStyle(MacColor.ink).lineLimit(1)
                         Spacer(minLength: 4)
-                        Text(reader.live.first { $0.name == name }?.mainValue ?? "").font(.system(size: 12, weight: .bold)).foregroundStyle(MacColor.ink)
+                        Text(reader.live.first { $0.name == name }?.mainValue ?? "").scaledFont(12, weight: .bold).foregroundStyle(MacColor.ink)
                     }
                 }
             }

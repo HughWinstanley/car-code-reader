@@ -29,6 +29,7 @@ final class Reader: ObservableObject {
     @Published var isDemo = false          // sample data; never saved — gone when the app restarts
     @Published var scanKind: ScanKind = .all
     @Published var status = "Not connected"
+    @Published var errorMessage: String? = nil   // what went wrong, in plain words, until the next try
     @Published var connected = false
     @Published var busy = false
     @Published var problems: [Problem] = []
@@ -108,6 +109,7 @@ final class Reader: ObservableObject {
     func connect() {
         guard !busy else { return }
         busy = true
+        errorMessage = nil
         status = useBluetooth ? "Connecting to \(bleAdapterName)…" : "Connecting to \(host):\(port)…"
         let raw: OBDLink = useBluetooth ? BLELink(adapterID: bleAdapterID) : WifiLink(host: host, port: UInt16(port) ?? 35000)
         let newLink = LoggingLink(raw) { [weak self] line in
@@ -130,7 +132,10 @@ final class Reader: ObservableObject {
                 await readVehicleInternal(e)
                 await scanInternal(e)
             } catch {
-                status = "Couldn't connect: \(error.localizedDescription)"
+                status = "Not connected"
+                errorMessage = Reader.plainWords(error, or: useBluetooth
+                    ? "Couldn't reach your Bluetooth adapter. Make sure it's plugged in with the key ON."
+                    : "Couldn't reach the adapter at \(host). Join its Wi-Fi network in the iPhone's Settings and check the key is ON.")
                 newLink.close()
             }
             busy = false
@@ -149,7 +154,7 @@ final class Reader: ObservableObject {
     func scan(deep: Bool = false) {
         if isDemo { applyDemoScan(); return }
         guard let e = elm, !busy else { return }
-        busy = true; status = "Scanning…"
+        busy = true; status = "Scanning…"; errorMessage = nil
         let live = pauseLive()
         Task {
             await live?.value   // a scan changes adapter settings, so live data must be fully stopped first
@@ -165,6 +170,11 @@ final class Reader: ObservableObject {
         batteryRows = []; batteryPrompt = nil; batteryNote = ""
         recalls = nil; recallStatus = ""
         liveStats = [:]; liveSeries = [:]; graphKeys = []; recording = false; recordingRows = []
+    }
+
+    /// Our own errors already say what to do. Anything from the system gets the given message instead.
+    static func plainWords(_ error: Error, or fallback: String) -> String {
+        (error as? OBDError)?.errorDescription ?? fallback
     }
 
     /// Stop a module scan after the module it's on.
@@ -210,7 +220,10 @@ final class Reader: ObservableObject {
             applyScan(obd: obd, modules: modules)
             if let ready { applySmog(ready) }
             saveToHistory()
-        } catch { status = "Scan error: \(error.localizedDescription)" }
+        } catch {
+            status = ""
+            errorMessage = Reader.plainWords(error, or: "The scan stopped because the adapter stopped answering. Check it's plugged in, then scan again.")
+        }
     }
 
     private func saveToHistory() {
@@ -263,7 +276,7 @@ final class Reader: ObservableObject {
     func clearCodes() {
         if isDemo { demoSamples = []; problems = []; moduleNames = []; scanned = true; status = "Codes cleared (demo)."; return }
         guard let e = elm, !busy else { return }
-        busy = true; status = "Clearing engine codes…"
+        busy = true; status = "Clearing engine codes…"; errorMessage = nil
         let before = Set(problems.filter { $0.urgency != "past" }.map(\.code))
         let targets = scannedModules.filter { !$0.codes.isEmpty }.map(\.target)
         let live = pauseLive()
@@ -280,7 +293,10 @@ final class Reader: ObservableObject {
                 status = still.isEmpty ? "Codes cleared. If a problem returns after some driving, it still needs fixing."
                                        : "Codes cleared, but \(still.count) came straight back. That problem is still there and needs fixing."
             }
-            catch { status = "Couldn't clear: \(error.localizedDescription)" }
+            catch {
+                status = ""
+                errorMessage = Reader.plainWords(error, or: "Codes may not have cleared because the adapter stopped answering. Scan again to check.")
+            }
             busy = false
         }
     }

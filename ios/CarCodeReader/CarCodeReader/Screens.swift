@@ -67,6 +67,7 @@ struct MakeBadge: View {
                 .offset(y: size * 0.03)
         }
         .frame(width: size, height: size)
+        .accessibilityHidden(true)   // the make's name is always next to it
     }
 }
 
@@ -100,6 +101,18 @@ struct VehiclePickerSheet: View {
         return Array((low...high).reversed())
     }
 
+    /// Truck, SUV or van picture for a model, falling back to the car on iOS versions without that symbol.
+    private func modelSymbol(_ model: String) -> String {
+        let wanted: String
+        switch VehicleKinds.byModel[make ?? ""]?[model] {
+        case "t": wanted = "truck.pickup.side.fill"
+        case "s": wanted = "suv.side.fill"
+        case "v": wanted = "bus.fill"
+        default:  wanted = "car.side.fill"
+        }
+        return UIImage(systemName: wanted) == nil ? "car.side.fill" : wanted
+    }
+
     private func goBack() {
         search = ""
         if model != nil || otherModel { model = nil; otherModel = false } else { make = nil }
@@ -112,13 +125,13 @@ struct VehiclePickerSheet: View {
                 Spacer()
                 LinkLabel("Cancel") { dismiss() }
             }
-            Text(title).font(.system(size: 22, weight: .bold)).foregroundStyle(MacColor.ink).padding(.top, 10)
-            Text(trail).font(.system(size: 13)).foregroundStyle(MacColor.muted)
+            Text(title).scaledFont(22, weight: .bold).foregroundStyle(MacColor.ink).padding(.top, 10)
+            Text(trail).scaledFont(13).foregroundStyle(MacColor.muted)
                 .fixedSize(horizontal: false, vertical: true).padding(.top, 2)
             HStack(spacing: 8) {
-                Text("Search").font(.system(size: 13)).foregroundStyle(MacColor.ink)
+                Text("Search").scaledFont(13).foregroundStyle(MacColor.ink)
                 TextField("", text: $search)
-                    .font(.system(size: 13)).autocorrectionDisabled().textInputAutocapitalization(.never)
+                    .scaledFont(13).autocorrectionDisabled().textInputAutocapitalization(.never)
                     .padding(.horizontal, 10).padding(.vertical, 7)
                     .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).stroke(MacColor.line, lineWidth: 1))
             }
@@ -140,8 +153,9 @@ struct VehiclePickerSheet: View {
                             if let m = list.first(where: { $0.name == name }) { model = m } else { otherModel = true }
                         } label: {
                             TileCard(title: name, subtitle: name == "Other model" ? "Not in the list" : "") {
-                                Image(systemName: "car.side.fill").font(.system(size: 34))
+                                Image(systemName: modelSymbol(name)).font(.system(size: 34))
                                     .foregroundStyle(name == "Other model" ? MacColor.off : MacColor.ink)
+                                    .accessibilityHidden(true)
                             }
                         }
                         .buttonStyle(.plain)
@@ -163,7 +177,7 @@ struct VehiclePickerSheet: View {
                         Text(years.contains { $0 < 1996 }
                              ? "1995 and older: use OBD-I on the Home page to read the blink codes, no adapter needed."
                              : "Only the years this model was sold, and that this app can read, are shown.")
-                            .font(.system(size: 12)).foregroundStyle(MacColor.muted)
+                            .scaledFont(12).foregroundStyle(MacColor.muted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }

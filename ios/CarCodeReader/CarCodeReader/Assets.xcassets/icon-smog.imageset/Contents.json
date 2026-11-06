@@ -1,23 +1,56 @@
 {
-  "images": [
+  "images" : [
     {
-      "filename": "icon-smog.png",
-      "idiom": "universal",
-      "scale": "1x"
+      "filename" : "icon-smog.png",
+      "idiom" : "universal",
+      "scale" : "1x"
     },
     {
-      "filename": "icon-smog@2x.png",
-      "idiom": "universal",
-      "scale": "2x"
+      "appearances" : [
+        {
+          "appearance" : "luminosity",
+          "value" : "dark"
+        }
+      ],
+      "filename" : "icon-smog-dark.png",
+      "idiom" : "universal",
+      "scale" : "1x"
     },
     {
-      "filename": "icon-smog@3x.png",
-      "idiom": "universal",
-      "scale": "3x"
+      "filename" : "icon-smog@2x.png",
+      "idiom" : "universal",
+      "scale" : "2x"
+    },
+    {
+      "appearances" : [
+        {
+          "appearance" : "luminosity",
+          "value" : "dark"
+        }
+      ],
+      "filename" : "icon-smog-dark@2x.png",
+      "idiom" : "universal",
+      "scale" : "2x"
+    },
+    {
+      "filename" : "icon-smog@3x.png",
+      "idiom" : "universal",
+      "scale" : "3x"
+    },
+    {
+      "appearances" : [
+        {
+          "appearance" : "luminosity",
+          "value" : "dark"
+        }
+      ],
+      "filename" : "icon-smog-dark@3x.png",
+      "idiom" : "universal",
+      "scale" : "3x"
     }
   ],
-  "info": {
-    "author": "xcode",
-    "version": 1
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
   }
 }

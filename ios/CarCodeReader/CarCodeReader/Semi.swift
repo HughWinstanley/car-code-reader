@@ -91,7 +91,7 @@ struct SemiView: View {
                                 Circle().fill(f.active ? MacColor.red : MacColor.off).frame(width: 8, height: 8)
                             }
                             .padding(.top, 2)
-                            Text(f.title).font(.system(size: 15, weight: .bold)).foregroundStyle(MacColor.ink)
+                            Text(f.title).scaledFont(15, weight: .bold).foregroundStyle(MacColor.ink)
                                 .fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: 4)
                             StatusPill(words: f.active ? "Active" : "Previous",
@@ -99,8 +99,8 @@ struct SemiView: View {
                                        text: f.active ? MacColor.red : MacColor.muted)
                         }
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("SPN \(f.spn), FMI \(f.fmi)").font(.system(size: 12)).foregroundStyle(MacColor.muted)
-                            Text(f.detail).font(.system(size: 13)).foregroundStyle(MacColor.ink)
+                            Text("SPN \(f.spn), FMI \(f.fmi)").scaledFont(12).foregroundStyle(MacColor.muted)
+                            Text(f.detail).scaledFont(13).foregroundStyle(MacColor.ink)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                         .padding(.leading, 26).padding(.top, 3)

@@ -72,7 +72,7 @@ struct OBD1GuideView: View {
                 PageTitle(title: guide?.title ?? group,
                           subtitle: "Follow the steps, count the flashes, then type the codes below.")
                 RoundCard(fill: MacColor.amberSoft, outline: MacColor.amberSoft, padY: 12) {
-                    Text(OBD1Help.safety).font(.system(size: 13)).foregroundStyle(MacColor.ink)
+                    Text(OBD1Help.safety).scaledFont(13).foregroundStyle(MacColor.ink)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let guide {
@@ -80,22 +80,22 @@ struct OBD1GuideView: View {
                         ForEach(Array(guide.steps.enumerated()), id: \.offset) { i, step in
                             HStack(alignment: .top, spacing: 12) {
                                 StepDot(number: i + 1, size: 30)
-                                Text(step).font(.system(size: 14)).foregroundStyle(MacColor.ink)
+                                Text(step).scaledFont(14).foregroundStyle(MacColor.ink)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
                     }
                     if !guide.note.isEmpty {
-                        Text(guide.note).font(.system(size: 12)).foregroundStyle(MacColor.muted)
+                        Text(guide.note).scaledFont(12).foregroundStyle(MacColor.muted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Codes you counted").font(.system(size: 14, weight: .bold)).foregroundStyle(MacColor.ink)
+                    Text("Codes you counted").scaledFont(14, weight: .bold).foregroundStyle(MacColor.ink)
                     HStack(spacing: 10) {
                         TextField("", text: $entry)
-                            .font(.system(size: 14)).keyboardType(.numbersAndPunctuation).submitLabel(.done)
+                            .scaledFont(14).keyboardType(.numbersAndPunctuation).submitLabel(.done)
                             .onSubmit { results = OBD1Help.parse(entry) }
                             .padding(.horizontal, 12).padding(.vertical, 9)
                             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(MacColor.line, lineWidth: 1))
@@ -103,12 +103,12 @@ struct OBD1GuideView: View {
                             .buttonStyle(PillStyle(kind: .primary))
                     }
                     Text("Separate codes with spaces or commas, for example: 12 33 44")
-                        .font(.system(size: 12)).foregroundStyle(MacColor.muted)
+                        .scaledFont(12).foregroundStyle(MacColor.muted)
                 }
 
                 if let results {
                     if results.isEmpty {
-                        Text("Type the numbers you counted first.").font(.system(size: 13)).foregroundStyle(MacColor.muted)
+                        Text("Type the numbers you counted first.").scaledFont(13).foregroundStyle(MacColor.muted)
                     }
                     ForEach(results, id: \.self) { code in resultCard(code) }
                 }
@@ -124,9 +124,9 @@ struct OBD1GuideView: View {
         let (meaning, kind) = OBD1Help.explain(group, code)
         return RoundCard(radius: 16, padY: 12) {
             HStack(alignment: .center, spacing: 10) {
-                Text(code).font(.system(size: 22, weight: .bold)).foregroundStyle(MacColor.ink)
+                Text(code).scaledFont(22, weight: .bold).foregroundStyle(MacColor.ink)
                     .frame(minWidth: 44, alignment: .leading)
-                Text(meaning).font(.system(size: 14)).foregroundStyle(MacColor.ink)
+                Text(meaning).scaledFont(14).foregroundStyle(MacColor.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 4)
                 switch kind {

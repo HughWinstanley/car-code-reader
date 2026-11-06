@@ -1,4 +1,4 @@
 {
-  "version": "2.15",
-  "notes": "Bluetooth now only connects to the adapter you choose in Settings, with clear messages instead of freezing."
+  "version": "2.16",
+  "notes": "Welcome screen, dark mode icons, truck, SUV and van icons, clearer error messages, and support for larger text and VoiceOver."
 }
