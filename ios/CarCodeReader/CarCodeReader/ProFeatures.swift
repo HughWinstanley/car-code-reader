@@ -648,6 +648,8 @@ struct TestsView: View {
     @EnvironmentObject var reader: Reader
     @State private var codeEntry = ""
     @State private var lookedUp = ""
+    @State private var showCode = false
+    @State private var codeHint = false
     private var ready: Bool { reader.connected && !reader.busy }
 
     private var misfires: [(cyl: Int, current: Double?, average: Double?)] {
@@ -671,8 +673,15 @@ struct TestsView: View {
     }
 
     private func lookup() {
-        if let code = RepairSearch.cleanCode(codeEntry) { codeEntry = code }
-        lookedUp = codeEntry.uppercased()
+        guard !codeEntry.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        if let code = RepairSearch.cleanCode(codeEntry) {   // the same page as Service: causes, checks and videos
+            codeEntry = code
+            lookedUp = code
+            codeHint = false
+            showCode = true
+        } else {
+            codeHint = true
+        }
     }
 
     var body: some View {
@@ -716,7 +725,7 @@ struct TestsView: View {
                 }
             }
 
-            section("Look up a code", "Find out what any code means, without the vehicle. Factory meanings use the vehicle you picked.") {
+            section("Look up a code", "See what any code means, what usually causes it, how to check it, and repair videos. No vehicle needed.") {
                 HStack(spacing: 10) {
                     TextField("P0301", text: $codeEntry)
                         .scaledFont(15).textInputAutocapitalization(.characters).autocorrectionDisabled()
@@ -725,19 +734,12 @@ struct TestsView: View {
                         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(MacColor.line, lineWidth: 1))
                     Button("Look up") { lookup() }.buttonStyle(PillStyle(kind: .primary))
                 }
-                if !lookedUp.isEmpty {
-                    if lookedUp.range(of: "^[PCBU][0-9A-F]{4}$", options: .regularExpression) == nil {
-                        proText("Type a code like P0301, C0035, B1932 or U0100 (a letter, then 4 numbers or letters).", muted: true)
-                    } else {
-                        let (text, factory) = DTC.describe(lookedUp, make: reader.make)
-                        proText("\(lookedUp): \(text)", bold: true)
-                        if let factory { proText("\(factory) factory meaning. It can differ by model and year.", muted: true, size: 12) }
-                        let causes = CodeDetail.commonCauses(lookedUp)
-                        if !causes.isEmpty { proText("Common causes: " + causes) }
-                    }
+                if codeHint {
+                    proText("Type a code like P0301, C0035, B1932 or U0100 (a letter, then 4 numbers or letters).", muted: true)
                 }
             }
         }
+        .navigationDestination(isPresented: $showCode) { CodeResultView(code: lookedUp) }
     }
 }
 
@@ -1036,31 +1038,32 @@ struct Launcher: View {
         Grid(horizontalSpacing: 12, verticalSpacing: 12) {
             GridRow {
                 NavigationLink { DiagnosticsView(selection: $selection) } label: {
-                    TileCard(title: "Diagnostics", subtitle: "Read codes, live data and tests") {
+                    TileCard(title: "Diagnostics", subtitle: "Read codes, live data and tests", roomy: true) {
                         Image("icon-engine").resizable().scaledToFit().frame(height: 72).accessibilityHidden(true)
                     }
                 }.buttonStyle(.plain)
                 NavigationLink { ServiceView() } label: {
-                    SymbolTile(title: "Service", subtitle: "Search how to fix things", symbol: "wrench.and.screwdriver.fill", tint: MacTint.safety)
+                    SymbolTile(title: "Service", subtitle: "Search how to fix things", symbol: "wrench.and.screwdriver.fill", tint: MacTint.safety, roomy: true)
                 }.buttonStyle(.plain)
             }
             GridRow {
                 NavigationLink { DataManagerView() } label: {
-                    SymbolTile(title: "Data manager", subtitle: "History, reports and recordings", symbol: "folder.fill", tint: Color(light: "#7A5A2E", dark: "#C49A5E"))
+                    SymbolTile(title: "Data manager", subtitle: "History, reports and recordings", symbol: "folder.fill", tint: Color(light: "#7A5A2E", dark: "#C49A5E"), roomy: true)
                 }.buttonStyle(.plain)
                 NavigationLink { BatteryTestView() } label: {
-                    SymbolTile(title: "Battery test", subtitle: "Battery and charging check", symbol: "minus.plus.batteryblock.fill", tint: MacTint.smog)
+                    SymbolTile(title: "Battery test", subtitle: "Battery and charging check", symbol: "minus.plus.batteryblock.fill", tint: MacTint.smog, roomy: true)
                 }.buttonStyle(.plain)
             }
             GridRow {
                 Button { selection = .settings } label: {
-                    SymbolTile(title: "Settings", subtitle: "Appearance and your adapter", symbol: "gearshape.fill", tint: Color(light: "#5E7488", dark: "#8FA3B5"))
+                    SymbolTile(title: "Settings", subtitle: "Appearance and your adapter", symbol: "gearshape.fill", tint: Color(light: "#5E7488", dark: "#8FA3B5"), roomy: true)
                 }.buttonStyle(.plain)
                 NavigationLink { UpdateView() } label: {
-                    SymbolTile(title: "Update", subtitle: "Check for a newer version", symbol: "arrow.down.circle.fill", tint: MacTint.vehicle)
+                    SymbolTile(title: "Update", subtitle: "Check for a newer version", symbol: "arrow.down.circle.fill", tint: MacTint.vehicle, roomy: true)
                 }.buttonStyle(.plain)
             }
         }
+        .frame(maxHeight: .infinity)   // the boxes share the whole screen
     }
 }
 
@@ -1124,8 +1127,9 @@ struct DiagnosticsRows: View {
 struct SymbolTile: View {
     let title: String, subtitle: String, symbol: String
     let tint: Color
+    var roomy = false
     var body: some View {
-        TileCard(title: title, subtitle: subtitle) {
+        TileCard(title: title, subtitle: subtitle, roomy: roomy) {
             ZStack {
                 Circle().fill(tint.opacity(0.18)).frame(width: 66, height: 66)
                 Image(systemName: symbol).font(.system(size: 28, weight: .semibold)).foregroundStyle(tint)

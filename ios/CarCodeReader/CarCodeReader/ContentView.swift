@@ -311,18 +311,20 @@ struct MacPage<Content: View>: View {
 struct TileCard<Art: View>: View {
     let title: String
     var subtitle = ""
+    var roomy = false              // a big box: centers what's inside and keeps the pictures lined up across a row
     @ViewBuilder let art: Art
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: roomy ? 10 : 6) {
             art.frame(height: 72)
             Text(title).scaledFont(15, weight: .bold).foregroundStyle(MacColor.ink)
                 .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
             if !subtitle.isEmpty {
                 Text(subtitle).scaledFont(12).foregroundStyle(MacColor.muted)
-                    .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.center).lineLimit(roomy ? 2 : 20, reservesSpace: roomy)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: roomy ? .center : .top)
         .padding(.horizontal, 10).padding(.vertical, 14)
         .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(MacColor.panel))
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(MacColor.line, lineWidth: 1))
@@ -511,6 +513,7 @@ struct HomeTab: View {
 
     var body: some View {
         MacPage {
+            GeometryReader { screen in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     if reader.isDemo || !reader.chosenName.isEmpty { vehicleBlock.padding(.bottom, 18) }
@@ -522,6 +525,8 @@ struct HomeTab: View {
                     }
                 }
                 .padding(16)
+                .frame(minHeight: layout == .original ? nil : screen.size.height, alignment: .top)
+            }
             }
             .scrollDismissesKeyboard(.interactively)
             .sheet(isPresented: $showPicker) { VehiclePickerSheet() }

@@ -1005,6 +1005,7 @@ class App:
         self.search_area = ScrollArea(page, C["page"])
         self.search_area.pack(fill="both", expand=True)
         self.search_from_fix = None
+        self.search_from_page = None  # the page to go back to when it isn't Service
         return page
 
     def _search_go_back(self):
@@ -1012,12 +1013,14 @@ class App:
             query, self.search_from_fix = self.search_from_fix, None
             self._show_fix_results(query)
         else:
-            self.show_page("Service")
+            page, self.search_from_page = self.search_from_page, None
+            self.show_page(page or "Service")
 
     def _search_fix(self):
         text = self.fix_var.get().strip()
         if not text:
             return
+        self.search_from_page = None
         code = clean_code(text)  # a code in the top bar still goes to the code page
         if code:
             self.search_from_fix = None
@@ -1036,7 +1039,7 @@ class App:
             return
         self.code_hint.configure(text="")
         self.code_var.set(code)
-        self.search_from_fix = None
+        self.search_from_fix = self.search_from_page = None
         self._show_code_result(code)
 
     def _vehicle_words(self):
@@ -2706,7 +2709,7 @@ class App:
             "run.", "Read info", self.read_module_info)
         self.lookup_out, _ = section(
             "alert", "engine", "Look up a code",
-            "Find out what any code means, without the vehicle. Factory meanings use the vehicle you picked.",
+            "See what any code means, what usually causes it, how to check it, and repair videos. No vehicle needed.",
             None, None, needs_adapter=False)
         row = tk.Frame(self.lookup_out, bg=C["panel"])
         row.pack(fill="x", pady=(12, 0))
@@ -2737,43 +2740,17 @@ class App:
 
     # Code lookup
     def lookup_code(self):
-        code = re.sub(r"[^A-Za-z0-9]", "", self.lookup_var.get()).upper()
-        if len(code) == 5:  # people often type the letter O for zero ("PO300") or I for one
-            code = code[0] + code[1:].replace("O", "0").replace("I", "1")
-        self.lookup_var.set(code)
-        self.root.after(60, self._show_lookup_result)  # bring the answer into view
+        """The same page as Service: causes, how to check it, and the web links."""
         self._clear(self.lookup_result)
-        if not re.fullmatch(r"[PCBU][0-9A-F]{4}", code):
-            self._line(self.lookup_result, "Type a code like P0301, C0035, B1932 or U0100 (a letter, then 4 "
-                                           "numbers or letters).", color=C["muted"],
-                       pady=(10, 0))
+        code = clean_code(self.lookup_var.get())
+        if not code:
+            if self.lookup_var.get().strip():
+                self._line(self.lookup_result, "Type a code like P0301, C0035, B1932 or U0100 (a letter, then 4 "
+                                               "numbers or letters).", color=C["muted"], pady=(10, 0))
             return
-        info = describe_dtc(code, self._current_make())
-        self._line(self.lookup_result, f"{code}: {info['description']}", bold=True, size=15, pady=(12, 2))
-        if info.get("factory"):
-            self._line(self.lookup_result, f"{info['factory']} factory meaning. It can differ a little by model and "
-                                           "year.", color=C["muted"])
-        if info["causes"]:
-            self._line(self.lookup_result, "Common causes", bold=True, pady=(8, 0))
-            self._line(self.lookup_result, info["causes"], pady=(0, 0))
-        for i, step in enumerate(info.get("checks") or [], 1):
-            if i == 1:
-                self._line(self.lookup_result, "How to check it", bold=True, pady=(8, 0))
-            self._line(self.lookup_result, f"{i}. {step}", pady=(2, 0))
-        self._line(self.lookup_result, as_sentences(info["category"]), color=C["muted"], pady=(8, 0))
-        row = tk.Frame(self.lookup_result, bg=C["panel"])
-        row.pack(fill="x", pady=(10, 0))
-        PillButton(row, "Search for repair info", lambda: self.lookup_online(code)).pack(side="left")
-        PillButton(row, "Repair videos", lambda: self.lookup_online(code, videos=True)).pack(side="left",
-                                                                                           padx=(10, 0))
-
-    def _show_lookup_result(self):
-        """Scroll the Tests page so the typed code and the start of its answer are at the top."""
-        self.root.update_idletasks()
-        inner = self.tests_area.inner
-        y = self.lookup_result.winfo_rooty() - inner.winfo_rooty() - 90
-        total = max(1, inner.winfo_height())
-        self.tests_area.canvas.yview_moveto(max(0.0, y / total))
+        self.lookup_var.set(code)
+        self.search_from_fix, self.search_from_page = None, "Tests"
+        self._show_code_result(code)
 
     # Self-test results (mode $06)
     def read_self_tests(self):
@@ -3180,7 +3157,46 @@ class App:
         page = tk.Frame(self.main, bg=C["page"])
         self._page_title(page, "Service", "Search how to fix something, or look up a code.", icon=PAGE_ICON["Service"])
         self._search_bars(page)
+        area = ScrollArea(page, C["page"])
+        area.pack(fill="both", expand=True)
+        self._popular(area.inner)
         return page
+
+    POPULAR_REPAIRS = (("Brake pads", "how to replace brake pads", "abs", "safety"),
+                       ("Battery", "how to replace a car battery", "battery", "battery"),
+                       ("Spark plugs", "how to replace spark plugs", "blink", "engine"),
+                       ("Air filter", "how to replace the engine air filter", "smog", "vehicle"),
+                       ("Overheating", "how to fix an overheating engine", "gauge", "semi"),
+                       ("Jump start", "how to jump-start a dead battery", "battery", "scan"))
+    COMMON_CODES = ("P0300", "P0420", "P0171", "P0442", "P0128", "P0455")
+
+    def _popular(self, box):
+        """One tap away, so Service isn't empty. Each repair finds a guide in the app as well as the web links."""
+        s = 64
+
+        def art(name, key):
+            return lambda cv, x, y: icons.draw(cv, name, x, y, s, TINT[key], F(int(s * 0.17), "bold"), halo=True)
+
+        def open_fix(query):
+            self.search_from_fix = self.search_from_page = None
+            self._show_fix_results(query)
+
+        def open_code(code):
+            self.search_from_fix = self.search_from_page = None
+            self._show_code_result(code)
+
+        self._line(box, "Popular repairs", bold=True, size=16, pady=(0, 8))
+        tile_grid(box, [(title, "", art(icon, key), lambda q=query: open_fix(q))
+                        for title, query, icon, key in self.POPULAR_REPAIRS],
+                  columns=3, width=184, art=92, title_size=14)
+        self._line(box, "Common codes", bold=True, size=16, pady=(14, 8))
+        for code in self.COMMON_CODES:
+            row = RoundPanel(box, pad=(20, 10), radius=14)
+            row.pack(fill="x", pady=(0, 8))
+            label = self._line(row.inner, f"{code}   {describe_dtc(code, None)['description']}", pady=0)
+            bind_click(row, lambda c=code: open_code(c), also=(row.inner, label))
+            for w in (row, row.inner, label):
+                w.configure(cursor="hand2")
 
     def _service_card(self, parent, g):
         card = RoundPanel(parent, pad=(20, 14), radius=16)

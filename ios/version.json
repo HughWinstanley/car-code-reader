@@ -1,4 +1,4 @@
 {
-  "version": "2.17",
-  "notes": "A cleaner Home with big boxes and no tabs, Diagnostics with one Full scan, semi trucks in Choose vehicle by brand, model and year, and a Service page that searches how to fix things and looks up codes."
+  "version": "2.18",
+  "notes": "Looking up a code on Tests now shows the fix steps and repair videos, and Service has popular repairs and common codes one tap away. The Home boxes also fill the screen."
 }

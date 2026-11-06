@@ -103,6 +103,16 @@ private struct WebLinks: View {
 
 struct SearchBars: View {
     @EnvironmentObject var reader: Reader
+    /// One tap away. Each of these finds a guide in the app as well as the web links (same list as the Mac app).
+    private let repairs: [(title: String, query: String, symbol: String, tint: Color)] = [
+        ("Brake pads", "how to replace brake pads", "exclamationmark.brakesignal", MacTint.safety),
+        ("Battery", "how to replace a car battery", "minus.plus.batteryblock.fill", MacTint.smog),
+        ("Spark plugs", "how to replace spark plugs", "bolt.fill", MacTint.engine),
+        ("Air filter", "how to replace the engine air filter", "wind", MacTint.vehicle),
+        ("Overheating", "how to fix an overheating engine", "thermometer.high", MacTint.semi),
+        ("Jump start", "how to jump-start a dead battery", "bolt.car.fill", MacTint.scan),
+    ]
+    private let commonCodes = ["P0300", "P0420", "P0171", "P0442", "P0128", "P0455"]
     @State private var fixText = ""
     @State private var codeText = ""
     @State private var fixQuery = ""
@@ -153,6 +163,7 @@ struct SearchBars: View {
     }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
         VStack(alignment: .leading, spacing: 8) {
             bar("Search how to fix something", $fixText, action: searchFix)
             bar("Type a code, like P0301", $codeText, action: searchCode)
@@ -160,6 +171,30 @@ struct SearchBars: View {
             if codeHint {
                 proText("That isn't a code. A code is a letter and 4 numbers or letters, like P0301. To search by words, use the top bar.", muted: true, size: 12)
             }
+        }
+        Text("Popular repairs").scaledFont(16, weight: .bold).foregroundStyle(MacColor.ink).padding(.top, 8)
+        TileGrid(items: repairs.map(\.title)) { title in
+            let r = repairs.first { $0.title == title }!
+            Button { fixQuery = r.query; showFix = true } label: {
+                SymbolTile(title: r.title, subtitle: "", symbol: r.symbol, tint: r.tint)
+            }
+            .buttonStyle(.plain)
+        }
+        Text("Common codes").scaledFont(16, weight: .bold).foregroundStyle(MacColor.ink).padding(.top, 8)
+        ForEach(commonCodes, id: \.self) { code in
+            Button { codeQuery = code; showCode = true } label: {
+                RoundCard(radius: 14, padY: 11) {
+                    HStack(spacing: 12) {
+                        proText(code, size: 14, bold: true).frame(minWidth: 52, alignment: .leading)
+                        proText(DTC.describe(code, make: reader.make).0, muted: true)
+                            .multilineTextAlignment(.leading)
+                        Spacer(minLength: 4)
+                        Image(systemName: "chevron.right").foregroundStyle(MacColor.muted).accessibilityHidden(true)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+        }
         }
         .navigationDestination(isPresented: $showFix) { FixResultsView(query: fixQuery) }
         .navigationDestination(isPresented: $showCode) { CodeResultView(code: codeQuery) }
