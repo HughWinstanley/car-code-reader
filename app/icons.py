@@ -288,47 +288,212 @@ def _history(cv, cx, cy, s, c):
                    joinstyle="round")
 
 
+# --- Icons that match the iPhone app's tiles --------------------------------------------------
+_cut = None  # the color of cut-outs: the disc behind the icon when there is one, so holes show the disc
+
+
+def _hole(cv):
+    return _cut or _bg(cv)
+
+
+def _rbox(cv, x0, y0, x1, y1, r, fill):
+    """A filled rounded box from plain shapes, so the corners stay round in the smooth icon renderer too."""
+    cv.create_rectangle(x0 + r, y0, x1 - r, y1, fill=fill, outline="")
+    cv.create_rectangle(x0, y0 + r, x1, y1 - r, fill=fill, outline="")
+    for x, y in ((x0 + r, y0 + r), (x1 - r, y0 + r), (x0 + r, y1 - r), (x1 - r, y1 - r)):
+        cv.create_oval(x - r, y - r, x + r, y + r, fill=fill, outline="")
+
+
+def _stroke(cv, c, w, *points):
+    """A line with round ends and round joins."""
+    cv.create_line(*points, fill=c, width=w, capstyle="round", joinstyle="round")
+    pts = list(zip(points[0::2], points[1::2]))
+    for x, y in pts:
+        cv.create_oval(x - w / 2, y - w / 2, x + w / 2, y + w / 2, fill=c, outline="")
+
+
 def _battery(cv, cx, cy, s, c):
     u = s / 10
     w = max(2, s / 13)
-    rounded_rect(cv, cx - 4.4 * u, cy - 2.6 * u, cx + 4.4 * u, cy + 3.4 * u, 0.9 * u, fill=c, outline="")
-    cv.create_rectangle(cx - 3.2 * u, cy - 3.6 * u, cx - 1.6 * u, cy - 2.6 * u, fill=c, outline="")
-    cv.create_rectangle(cx + 1.6 * u, cy - 3.6 * u, cx + 3.2 * u, cy - 2.6 * u, fill=c, outline="")
-    bg = _bg(cv)
-    cv.create_line(cx - 3.1 * u, cy + 0.4 * u, cx - 1.1 * u, cy + 0.4 * u, fill=bg, width=w)
-    cv.create_line(cx + 1.1 * u, cy + 0.4 * u, cx + 3.1 * u, cy + 0.4 * u, fill=bg, width=w)
-    cv.create_line(cx + 2.1 * u, cy - 0.6 * u, cx + 2.1 * u, cy + 1.4 * u, fill=bg, width=w)
+    _rbox(cv, cx - 4.4 * u, cy - 2.5 * u, cx + 4.4 * u, cy + 3.3 * u, 0.8 * u, c)
+    _rbox(cv, cx - 3.5 * u, cy - 3.5 * u, cx - 1.5 * u, cy - 2 * u, 0.4 * u, c)
+    _rbox(cv, cx + 1.5 * u, cy - 3.5 * u, cx + 3.5 * u, cy - 2 * u, 0.4 * u, c)
+    hole = _hole(cv)
+    _stroke(cv, hole, w, cx - 3 * u, cy + 0.4 * u, cx - 1 * u, cy + 0.4 * u)
+    _stroke(cv, hole, w, cx + 1 * u, cy + 0.4 * u, cx + 3 * u, cy + 0.4 * u)
+    _stroke(cv, hole, w, cx + 2 * u, cy - 0.6 * u, cx + 2 * u, cy + 1.4 * u)
 
 
 def _gear(cv, cx, cy, s, c):
     u = s / 10
     for k in range(8):
         a = math.pi * k / 4
-        cv.create_line(cx + 2.6 * u * math.cos(a), cy + 2.6 * u * math.sin(a), cx + 4.4 * u * math.cos(a),
-                       cy + 4.4 * u * math.sin(a), fill=c, width=max(3, s / 6))
-    cv.create_oval(cx - 3.3 * u, cy - 3.3 * u, cx + 3.3 * u, cy + 3.3 * u, fill=c, outline="")
-    cv.create_oval(cx - 1.4 * u, cy - 1.4 * u, cx + 1.4 * u, cy + 1.4 * u, fill=_bg(cv), outline="")
+        cv.create_line(cx + 2.6 * u * math.cos(a), cy + 2.6 * u * math.sin(a), cx + 4.3 * u * math.cos(a),
+                       cy + 4.3 * u * math.sin(a), fill=c, width=max(3, s / 5.5))
+    cv.create_oval(cx - 3.4 * u, cy - 3.4 * u, cx + 3.4 * u, cy + 3.4 * u, fill=c, outline="")
+    cv.create_oval(cx - 1.5 * u, cy - 1.5 * u, cx + 1.5 * u, cy + 1.5 * u, fill=_hole(cv), outline="")
 
 
 def _folder(cv, cx, cy, s, c):
     u = s / 10
-    cv.create_polygon(cx - 4.4 * u, cy - 3.2 * u, cx - 1.2 * u, cy - 3.2 * u, cx + 0.2 * u, cy - 1.8 * u,
-                      cx + 4.4 * u, cy - 1.8 * u, cx + 4.4 * u, cy + 3.4 * u, cx - 4.4 * u, cy + 3.4 * u, fill=c, outline="")
-    cv.create_line(cx - 4.4 * u, cy - 0.7 * u, cx + 4.4 * u, cy - 0.7 * u, fill=_bg(cv), width=max(1, s / 22))
+    _rbox(cv, cx - 4.4 * u, cy - 3.4 * u, cx - 0.2 * u, cy, 0.7 * u, c)
+    _rbox(cv, cx - 4.4 * u, cy - 2.4 * u, cx + 4.4 * u, cy + 3.4 * u, 0.7 * u, c)
+    _stroke(cv, blend(c, "#FFFFFF", 0.65), max(1, s / 24), cx - 3.6 * u, cy - 1.5 * u, cx + 3.6 * u, cy - 1.5 * u)
 
 
 def _download(cv, cx, cy, s, c):
+    """A filled circle with an arrow pointing down: check for a newer version."""
     u = s / 10
-    w = max(2, s / 9)
-    cv.create_line(cx, cy - 4.2 * u, cx, cy + 0.6 * u, fill=c, width=w)
-    cv.create_polygon(cx - 3 * u, cy - 0.8 * u, cx + 3 * u, cy - 0.8 * u, cx, cy + 2.8 * u, fill=c, outline="")
-    cv.create_line(cx - 4.2 * u, cy + 4.1 * u, cx + 4.2 * u, cy + 4.1 * u, fill=c, width=w)
+    w = max(2, s / 11)
+    cv.create_oval(cx - 4.2 * u, cy - 4.2 * u, cx + 4.2 * u, cy + 4.2 * u, fill=c, outline="")
+    hole = _hole(cv)
+    _stroke(cv, hole, w, cx, cy - 2.2 * u, cx, cy + 2 * u)
+    _stroke(cv, hole, w, cx - 1.8 * u, cy + 0.3 * u, cx, cy + 2.1 * u, cx + 1.8 * u, cy + 0.3 * u)
+
+
+def _tools(cv, cx, cy, s, c):
+    """A wrench crossed over a screwdriver."""
+    u = s / 10
+    hole = _hole(cv)
+    _stroke(cv, c, max(2, s / 12), cx - 3.7 * u, cy - 3.7 * u, cx + 0.8 * u, cy + 0.8 * u)  # blade
+    _stroke(cv, c, max(4, s / 4.6), cx + 1.9 * u, cy + 1.9 * u, cx + 3.5 * u, cy + 3.5 * u)  # handle
+    _stroke(cv, hole, max(4, s / 4.4), cx - 2.8 * u, cy + 2.8 * u, cx + 1.8 * u, cy - 1.8 * u)  # gap where they cross
+    _stroke(cv, c, max(3, s / 6.5), cx - 3.2 * u, cy + 3.2 * u, cx + 1.8 * u, cy - 1.8 * u)  # wrench
+    hx, hy, r = cx + 2.5 * u, cy - 2.5 * u, 2 * u
+    cv.create_oval(hx - r, hy - r, hx + r, hy + r, fill=c, outline="")
+    cv.create_polygon(hx - 0.2 * u, hy + 0.2 * u, hx + 2.6 * u, hy - 1.1 * u, hx + 1.1 * u, hy - 2.6 * u, fill=hole, outline=hole)
+    d = 0.45 * u
+    cv.create_oval(cx - 3.3 * u - d, cy + 3.3 * u - d, cx - 3.3 * u + d, cy + 3.3 * u + d, fill=hole, outline="")
+
+
+def _checklist(cv, cx, cy, s, c):
+    """Two lines, the first one checked off."""
+    u = s / 10
+    w = max(2, s / 11)
+    hole = _hole(cv)
+    r = 1.7 * u
+    y1, y2 = cy - 2.1 * u, cy + 2.1 * u
+    x = cx - 2.6 * u
+    cv.create_oval(x - r, y1 - r, x + r, y1 + r, fill=c, outline="")
+    _stroke(cv, hole, max(1.5, s / 18), x - 0.8 * u, y1, x - 0.2 * u, y1 + 0.7 * u, x + 0.8 * u, y1 - 0.7 * u)
+    cv.create_oval(x - r, y2 - r, x + r, y2 + r, fill=c, outline="")
+    q = r - max(2, s / 13)
+    cv.create_oval(x - q, y2 - q, x + q, y2 + q, fill=hole, outline="")
+    _stroke(cv, c, w, cx + 0.4 * u, y1, cx + 4 * u, y1)
+    _stroke(cv, c, w, cx + 0.4 * u, y2, cx + 4 * u, y2)
+
+
+def _car_front(cv, cx, cy, s, c, hole, windows=True):
+    """A car seen from the front."""
+    u = s / 10
+    cv.create_polygon(cx - 3 * u, cy - 0.4 * u, cx - 2.2 * u, cy - 3 * u, cx + 2.2 * u, cy - 3 * u,
+                      cx + 3 * u, cy - 0.4 * u, fill=c, outline=c)
+    _rbox(cv, cx - 4 * u, cy - 0.8 * u, cx + 4 * u, cy + 2.6 * u, 0.9 * u, c)
+    _rbox(cv, cx - 3.5 * u, cy + 2 * u, cx - 2 * u, cy + 3.7 * u, 0.4 * u, c)   # wheels
+    _rbox(cv, cx + 2 * u, cy + 2 * u, cx + 3.5 * u, cy + 3.7 * u, 0.4 * u, c)
+    if windows:
+        cv.create_polygon(cx - 2.2 * u, cy - 0.6 * u, cx - 1.7 * u, cy - 2.3 * u, cx + 1.7 * u, cy - 2.3 * u,
+                          cx + 2.2 * u, cy - 0.6 * u, fill=hole, outline=hole)
+    r = 0.7 * u
+    for x in (cx - 2.7 * u, cx + 2.7 * u):   # headlights
+        cv.create_oval(x - r, cy + 0.7 * u - r, x + r, cy + 0.7 * u + r, fill=hole, outline="")
+
+
+def _carfront(cv, cx, cy, s, c):
+    _car_front(cv, cx, cy, s, c, _hole(cv))
+
+
+def _cars(cv, cx, cy, s, c):
+    """Two cars, one behind the other: used cars."""
+    u = s / 10
+    hole = _hole(cv)
+    _car_front(cv, cx - 1.7 * u, cy - 0.9 * u, s * 0.74, c, hole)
+    _rbox(cv, cx - 2.2 * u, cy - 1.7 * u, cx + 5 * u, cy + 4.4 * u, 1.2 * u, hole)  # the gap between them
+    _car_front(cv, cx + 1.4 * u, cy + 1 * u, s * 0.74, c, hole)
+
+
+def _fuel(cv, cx, cy, s, c):
+    """A fuel pump with its hose."""
+    u = s / 10
+    hole = _hole(cv)
+    _rbox(cv, cx - 3.6 * u, cy - 4.2 * u, cx + 1.2 * u, cy + 3.4 * u, 0.7 * u, c)
+    _rbox(cv, cx - 4.2 * u, cy + 3 * u, cx + 1.8 * u, cy + 4.2 * u, 0.3 * u, c)
+    _rbox(cv, cx - 2.6 * u, cy - 3.2 * u, cx + 0.2 * u, cy - 0.8 * u, 0.3 * u, hole)
+    _stroke(cv, c, max(2, s / 15), cx + 1.2 * u, cy + 0.2 * u, cx + 2.5 * u, cy + 0.2 * u, cx + 2.5 * u, cy + 2.4 * u,
+            cx + 3.8 * u, cy + 2.4 * u, cx + 3.8 * u, cy - 1.6 * u, cx + 2.2 * u, cy - 3.2 * u)
+
+
+def _brake(cv, cx, cy, s, c):
+    """The brake warning light: an exclamation mark in a circle, with arcs at the sides."""
+    u = s / 10
+    w = max(2, s / 12)
+    r = 2.9 * u
+    cv.create_oval(cx - r, cy - r, cx + r, cy + r, outline=c, width=w)
+    _stroke(cv, c, w, cx, cy - 1.6 * u, cx, cy + 0.3 * u)
+    d = w / 2
+    cv.create_oval(cx - d, cy + 1.3 * u - d, cx + d, cy + 1.3 * u + d, fill=c, outline="")
+    r = 4.5 * u
+    for start in (130, -50):
+        cv.create_arc(cx - r, cy - r, cx + r, cy + r, start=start, extent=100, style="arc", outline=c, width=w)
+
+
+def _bolt(cv, cx, cy, s, c):
+    u = s / 10
+    cv.create_polygon(cx + 1 * u, cy - 4.4 * u, cx - 3 * u, cy + 0.8 * u, cx - 0.4 * u, cy + 0.8 * u, cx - 1.2 * u,
+                      cy + 4.4 * u, cx + 3 * u, cy - 1 * u, cx + 0.4 * u, cy - 1 * u, fill=c, outline=c)
+
+
+def _wind(cv, cx, cy, s, c):
+    """Three lines of moving air, curling at the ends."""
+    u = s / 10
+    w = max(2, s / 14)
+    for y, end, r in ((-1.6, 1.7, 1.3), (0.6, 2.9, 1.1), (2.6, 0.9, 1.1)):
+        _stroke(cv, c, w, cx - 4.2 * u, cy + y * u, cx + end * u, cy + y * u)
+        top = y - 2 * r if y < 2 else y
+        start, extent = (-90, 240) if y < 2 else (90, -240)
+        cv.create_arc(cx + (end - r) * u, cy + top * u, cx + (end + r) * u, cy + (top + 2 * r) * u, start=start,
+                      extent=extent, style="arc", outline=c, width=w)
+
+
+def _thermo(cv, cx, cy, s, c):
+    """A thermometer with its scale."""
+    u = s / 10
+    w = max(2, s / 14)
+    hole = _hole(cv)
+    x = cx - 1 * u
+    _rbox(cv, x - 1.4 * u, cy - 4.4 * u, x + 1.4 * u, cy + 1.6 * u, 1.4 * u, c)
+    r = 2.5 * u
+    cv.create_oval(x - r, cy + 1.9 * u - r, x + r, cy + 1.9 * u + r, fill=c, outline="")
+    _rbox(cv, x - 0.7 * u, cy - 3.7 * u, x + 0.7 * u, cy + 1.6 * u, 0.7 * u, hole)
+    r = 1.7 * u
+    cv.create_oval(x - r, cy + 1.9 * u - r, x + r, cy + 1.9 * u + r, fill=hole, outline="")
+    r = 1.1 * u
+    cv.create_oval(x - r, cy + 1.9 * u - r, x + r, cy + 1.9 * u + r, fill=c, outline="")
+    _stroke(cv, c, w, x, cy - 2.2 * u, x, cy + 1.6 * u)
+    for y, end in ((-3.6, 4), (-2, 3.2), (-0.4, 4)):
+        _stroke(cv, c, max(1.5, s / 20), cx + 2 * u, cy + y * u, cx + end * u, cy + y * u)
+
+
+def _carbolt(cv, cx, cy, s, c):
+    """A car with a lightning bolt on it: a jump start."""
+    u = s / 10
+    hole = _hole(cv)
+    _car_front(cv, cx, cy, s, c, hole, windows=False)
+    _bolt(cv, cx, cy - 0.6 * u, s * 0.5, hole)
+
+
+_MATCHED = {"battery": _battery, "gear": _gear, "folder": _folder, "download": _download, "tools": _tools,
+            "checklist": _checklist, "carfront": _carfront, "cars": _cars, "fuel": _fuel, "brake": _brake,
+            "bolt": _bolt, "wind": _wind, "thermo": _thermo, "carbolt": _carbolt}
 
 
 def draw(cv, name, cx, cy, size, color, small_font=None, halo=False):
+    global _cut
+    _cut = None
     if halo:  # a soft disc behind the icon
         r = size * 0.72
-        cv.create_oval(cx - r, cy - r, cx + r, cy + r, fill=blend(_bg(cv), color, 0.13), outline="")
+        _cut = blend(_bg(cv), color, 0.18 if name in _MATCHED else 0.13)
+        cv.create_oval(cx - r, cy - r, cx + r, cy + r, fill=_cut, outline="")
     if name == "engine":
         _engine(cv, cx, cy, size, color)
     elif name == "abs":
@@ -353,16 +518,10 @@ def draw(cv, name, cx, cy, size, color, small_font=None, halo=False):
         _history(cv, cx, cy, size, color)
     elif name == "wrench":
         _wrench(cv, cx, cy, size, color)
+    elif name in _MATCHED:
+        _MATCHED[name](cv, cx, cy, size, color)
     elif name == "help":
         _help(cv, cx, cy, size, color, small_font)
-    elif name == "battery":
-        _battery(cv, cx, cy, size, color)
-    elif name == "gear":
-        _gear(cv, cx, cy, size, color)
-    elif name == "folder":
-        _folder(cv, cx, cy, size, color)
-    elif name == "download":
-        _download(cv, cx, cy, size, color)
     elif name in ("truck", "suv", "car", "van", "vehicle"):
         _body(cv, cx, cy, size, color, "truck" if name == "vehicle" else name)
 

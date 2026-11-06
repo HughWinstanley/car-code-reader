@@ -164,11 +164,12 @@ DRIVE_CYCLES = {
 # The colors used for the pictures on Home; the other pages and the side menu use the same ones.
 TINT = {"engine": "#E08A00", "safety": "#D9362B", "scan": "#6C4BD1", "gauge": "#0F8B8D", "smog": "#1E8A4A",
         "vehicle": "#1F6FD1", "semi": "#B4532A", "old": "#C49A5E" if DARK else "#7A5A2E", "home": "#E5E5E5" if DARK else "#222222", "help": "#5E7488",
-        "service": "#B03E6E", "history": "#2C5C9A", "battery": "#3A9A56"}
+        "service": "#B03E6E", "history": "#2C5C9A", "battery": "#3A9A56",
+        "settings": "#8FA3B5" if DARK else "#5E7488"}
 PAGE_ICON = {"Home": ("home", "home"), "Problems": ("alert", "engine"), "Live data": ("gauge", "gauge"),
-             "Smog check": ("smog", "smog"), "Tests": ("scan", "scan"), "Vehicle": ("vehicle", "vehicle"),
-             "Service": ("wrench", "service"), "History": ("history", "history"),
-             "Used car": ("vehicle", "semi"), "Trip": ("gauge", "battery"),
+             "Smog check": ("smog", "smog"), "Tests": ("checklist", "scan"), "Vehicle": ("carfront", "vehicle"),
+             "Service": ("tools", "safety"), "History": ("history", "history"),
+             "Used car": ("cars", "semi"), "Trip": ("fuel", "battery"),
              "Help": ("help", "help")}
 
 _FONTS = {}
@@ -958,11 +959,11 @@ class App:
         return page
 
     LAUNCHER = (("Diagnostics", "Read codes, live data and tests", "engine", "engine", lambda self: self.show_page("Diagnostics")),
-                ("Service", "Search how to fix things", "wrench", "safety", lambda self: self.show_page("Service")),
+                ("Service", "Search how to fix things", "tools", "safety", lambda self: self.show_page("Service")),
                 ("Data manager", "History, reports and recordings", "folder", "old",
                  lambda self: self.show_page("Data manager")),
-                ("Battery test", "Battery and charging check", "battery", "battery", lambda self: self.show_page("Tests")),
-                ("Settings", "Appearance and layout", "gear", "help", lambda self: self.show_page("Settings")),
+                ("Battery test", "Battery and charging check", "battery", "smog", lambda self: self.show_page("Tests")),
+                ("Settings", "Appearance and layout", "gear", "settings", lambda self: self.show_page("Settings")),
                 ("Update", "Check for a newer version", "download", "vehicle", lambda self: self._open_update()))
 
     def _launcher(self, page):
@@ -1214,10 +1215,10 @@ class App:
              lambda: self.show_page("Smog check")),
             ("OBD-I", "Blink codes (1995 & older), no adapter", art("blink", "old"), lambda: self.open_obd1()),
         ] + ([
-            ("Tests", "Battery, self-tests and misfires", art("scan", "scan"), lambda: self.show_page("Tests")),
-            ("Used car", "What to know before you buy", art("vehicle", "semi"), lambda: self.show_page("Used car")),
-            ("Trip", "Fuel economy and 0-60 timer", art("gauge", "battery"), lambda: self.show_page("Trip")),
-            ("Vehicle", "VIN, battery and safety recalls", art("vehicle", "vehicle"), lambda: self.show_page("Vehicle")),
+            ("Tests", "Battery, self-tests and misfires", art("checklist", "scan"), lambda: self.show_page("Tests")),
+            ("Used car", "What to know before you buy", art("cars", "semi"), lambda: self.show_page("Used car")),
+            ("Trip", "Fuel economy and 0-60 timer", art("fuel", "battery"), lambda: self.show_page("Trip")),
+            ("Vehicle", "VIN, battery and safety recalls", art("carfront", "vehicle"), lambda: self.show_page("Vehicle")),
         ] if more else []), columns=4, width=184, art=92, title_size=14)
 
 
@@ -3162,12 +3163,12 @@ class App:
         self._popular(area.inner)
         return page
 
-    POPULAR_REPAIRS = (("Brake pads", "how to replace brake pads", "abs", "safety"),
-                       ("Battery", "how to replace a car battery", "battery", "battery"),
-                       ("Spark plugs", "how to replace spark plugs", "blink", "engine"),
-                       ("Air filter", "how to replace the engine air filter", "smog", "vehicle"),
-                       ("Overheating", "how to fix an overheating engine", "gauge", "semi"),
-                       ("Jump start", "how to jump-start a dead battery", "battery", "scan"))
+    POPULAR_REPAIRS = (("Brake pads", "how to replace brake pads", "brake", "safety"),
+                       ("Battery", "how to replace a car battery", "battery", "smog"),
+                       ("Spark plugs", "how to replace spark plugs", "bolt", "engine"),
+                       ("Air filter", "how to replace the engine air filter", "wind", "vehicle"),
+                       ("Overheating", "how to fix an overheating engine", "thermo", "semi"),
+                       ("Jump start", "how to jump-start a dead battery", "carbolt", "scan"))
     COMMON_CODES = ("P0300", "P0420", "P0171", "P0442", "P0128", "P0455")
 
     def _popular(self, box):
