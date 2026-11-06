@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum AppInfo { static let version = "2.14 — Nov 6" }
+enum AppInfo { static let version = "2.15 — Nov 6" }
 enum Tab: CaseIterable {
     case home, problems, live, smog, tests, service, usedCar, trip, vehicle, history, help, settings
 
@@ -963,7 +963,7 @@ struct ProblemsTab: View {
                     .padding(.top, 4).padding(.bottom, 6)
                 LinkLabel("See a demo (sample data)") { reader.loadDemo() }
             }
-            Text(reader.useBluetooth ? "Using Bluetooth." : "Using Wi-Fi \(reader.host):\(reader.port).")
+            Text(reader.useBluetooth ? (reader.bleAdapterName.isEmpty ? "Using Bluetooth. No adapter chosen yet." : "Using Bluetooth: \(reader.bleAdapterName).") : "Using Wi-Fi \(reader.host):\(reader.port).")
                 .font(.system(size: 12)).foregroundStyle(MacColor.muted)
             LinkLabel("Connection options") { selection = .settings }
         }
@@ -1305,7 +1305,9 @@ struct SettingsTab: View {
                             heading("How the adapter connects")
                             Toggle("Use Bluetooth adapter", isOn: $reader.useBluetooth)
                                 .font(.system(size: 14)).tint(MacColor.green)
-                            if !reader.useBluetooth {
+                            if reader.useBluetooth {
+                                BLEPicker()
+                            } else {
                                 field("Wi-Fi address", "192.168.0.10", $reader.host)
                                 field("Port", "35000", $reader.port).keyboardType(.numberPad)
                             }

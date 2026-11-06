@@ -1043,6 +1043,59 @@ struct TripView: View {
     }
 }
 
+// MARK: - Choosing a Bluetooth adapter
+
+struct BLEPicker: View {
+    @EnvironmentObject var reader: Reader
+    @StateObject private var scanner = BLEScanner()
+
+    private func row(_ device: BLEDevice) -> some View {
+        Button {
+            reader.bleAdapterID = device.id
+            reader.bleAdapterName = device.name
+            scanner.stop()
+        } label: {
+            HStack {
+                Text(device.name).font(.system(size: 14)).foregroundStyle(MacColor.ink)
+                Spacer(minLength: 8)
+                if reader.bleAdapterID == device.id {
+                    StatusPill(words: "Chosen", fill: MacColor.greenSoft, text: MacColor.green)
+                }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(MacColor.line, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            proText(reader.bleAdapterName.isEmpty ? "No adapter chosen yet." : "Adapter: \(reader.bleAdapterName)", bold: true)
+            HStack(spacing: 10) {
+                Button(scanner.scanning ? "Stop" : "Find adapters") {
+                    if scanner.scanning { scanner.stop() } else { scanner.start() }
+                }
+                .buttonStyle(PillStyle())
+                if scanner.scanning { ProgressView() }
+            }
+            if !scanner.message.isEmpty { proText(scanner.message, muted: true, size: 12) }
+            let likely = scanner.devices.filter(\.likely), others = scanner.devices.filter { !$0.likely }
+            if !likely.isEmpty {
+                proText("Looks like an adapter", size: 12, bold: true)
+                ForEach(likely) { row($0) }
+            }
+            if !others.isEmpty {
+                proText("Other Bluetooth devices", size: 12, bold: true)
+                proText("Only choose one of these if you recognize it as your adapter.", muted: true, size: 12)
+                ForEach(others) { row($0) }
+            }
+            proText("Don't pair it in the iPhone's Bluetooth settings. Choose it here.", muted: true, size: 12)
+        }
+        .onDisappear { scanner.stop() }
+    }
+}
+
 // MARK: - Live graph
 
 /// Up to 4 readings over the last 90 seconds. Each line has its own scale, like the Mac app's LiveGraph.

@@ -1,4 +1,4 @@
 {
-  "version": "2.14",
-  "notes": "Used car check, Trip page with mpg and a 0-60 timer, VIN details, more live readings, and more tabs you can switch back to the original layout in Settings."
+  "version": "2.15",
+  "notes": "Bluetooth now only connects to the adapter you choose in Settings, with clear messages instead of freezing."
 }

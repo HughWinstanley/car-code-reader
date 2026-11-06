@@ -51,6 +51,12 @@ final class Reader: ObservableObject {
     @Published var useBluetooth = UserDefaults.standard.bool(forKey: "useBluetooth") {
         didSet { UserDefaults.standard.set(useBluetooth, forKey: "useBluetooth") }
     }
+    @Published var bleAdapterName = UserDefaults.standard.string(forKey: "bleAdapterName") ?? "" {
+        didSet { UserDefaults.standard.set(bleAdapterName, forKey: "bleAdapterName") }
+    }
+    @Published var bleAdapterID = UserDefaults.standard.string(forKey: "bleAdapterID").flatMap(UUID.init) {
+        didSet { UserDefaults.standard.set(bleAdapterID?.uuidString, forKey: "bleAdapterID") }
+    }
     @Published var host = UserDefaults.standard.string(forKey: "adapterHost") ?? "192.168.0.10" {
         didSet { UserDefaults.standard.set(host, forKey: "adapterHost") }
     }
@@ -102,8 +108,8 @@ final class Reader: ObservableObject {
     func connect() {
         guard !busy else { return }
         busy = true
-        status = useBluetooth ? "Looking for a Bluetooth adapter…" : "Connecting to \(host):\(port)…"
-        let raw: OBDLink = useBluetooth ? BLELink() : WifiLink(host: host, port: UInt16(port) ?? 35000)
+        status = useBluetooth ? "Connecting to \(bleAdapterName)…" : "Connecting to \(host):\(port)…"
+        let raw: OBDLink = useBluetooth ? BLELink(adapterID: bleAdapterID) : WifiLink(host: host, port: UInt16(port) ?? 35000)
         let newLink = LoggingLink(raw) { [weak self] line in
             Task { @MainActor in
                 self?.adapterLog.append(line)
