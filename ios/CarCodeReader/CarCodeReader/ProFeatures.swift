@@ -121,6 +121,22 @@ enum Recalls {
         }
         return out
     }
+    static func vinDetails(_ vin: String) async throws -> [(String, String)] {
+        let d = try await json("https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/\(enc(vin))?format=json")
+        guard let r = (d["Results"] as? [[String: Any]])?.first else { return [] }
+        let fields = [("Year", "ModelYear"), ("Make", "Make"), ("Model", "Model"), ("Trim", "Trim"), ("Body", "BodyClass"),
+                      ("Engine size (liters)", "DisplacementL"), ("Cylinders", "EngineCylinders"), ("Fuel", "FuelTypePrimary"),
+                      ("Drive", "DriveType"), ("Built in", "PlantCountry")]
+        var out: [(String, String)] = fields.compactMap { label, key in
+            guard let v = r[key] as? String, !v.isEmpty else { return nil }
+            return (label, ["Make", "Model", "PlantCountry"].contains(key) ? v.capitalized.replacingOccurrences(of: "(Usa)", with: "(USA)") : v)
+        }
+        if (r["ErrorText"] as? String ?? "").lowercased().contains("check digit") {
+            out.append(("Warning", "The VIN's check digit doesn't add up. It may be misread or altered."))
+        }
+        return out
+    }
+
     /// `matched` is false when the vehicle couldn't be found in the database, which is not the same as "no recalls".
     static func find(make: String, model: String, year: Int?, vin: String) async throws -> (recalls: [Recall], matched: Bool) {
         var (make, model, year) = (make, model, year)
@@ -189,6 +205,50 @@ final class LoggingLink: OBDLink {
         let reply = try await inner.command(text, timeout: timeout)
         onLine("< " + reply.replacingOccurrences(of: "\r", with: " ").trimmingCharacters(in: .whitespaces))
         return reply
+    }
+}
+
+struct UsedCarRow: Identifiable {
+    enum Level { case good, warn, bad, info }
+    let id = UUID()
+    let label: String, value: String, words: String
+    let level: Level
+}
+
+/// Fuel economy from the air the engine uses, and a 0-60 timer. Fuel figures are gasoline estimates (the Mac app's TripMeter).
+struct TripMeter {
+    private static let gramsPerGallon = 2801.18, airFuel = 14.7, kmToMiles = 0.621371, sixtyMphInKmh = 96.56
+    var miles = 0.0, gallons = 0.0
+    var instantMpg: Double? = nil
+    var best060: Double? = nil, last060: Double? = nil
+    private var last: Date? = nil, armed = false, launch: Date? = nil
+    var averageMpg: Double? { gallons > 0 ? miles / gallons : nil }
+
+    mutating func update(now: Date, kmh: Double, maf: Double?) {
+        if let last {
+            let dt = now.timeIntervalSince(last)
+            miles += kmh * Self.kmToMiles * dt / 3600
+            if let maf, maf > 0 { gallons += maf / Self.airFuel / Self.gramsPerGallon * dt }
+        }
+        last = now
+        if let maf, maf > 0 {
+            instantMpg = (kmh * Self.kmToMiles) / (maf * 3600 / Self.airFuel / Self.gramsPerGallon)
+        } else {
+            instantMpg = nil
+        }
+        if kmh < 1 {
+            armed = true
+            launch = nil
+        } else if armed {
+            if launch == nil { launch = now }
+            if kmh >= Self.sixtyMphInKmh, let launch {
+                let time = now.timeIntervalSince(launch)
+                last060 = time
+                best060 = min(best060 ?? time, time)
+                armed = false
+                self.launch = nil
+            }
+        }
     }
 }
 
@@ -337,6 +397,133 @@ extension Reader {
                     self.batteryNote = "Done. You can let the engine idle again. Parts stores can do a load test if anything here looks weak."
                 }
             }
+        }
+    }
+
+    private func applyUsedCar(_ rows: [UsedCarRow]) {
+        usedCarRows = rows
+        let bad = rows.filter { $0.level == .bad }.count, warn = rows.filter { $0.level == .warn }.count
+        if bad > 0 {
+            usedCarHeadline = "\(bad) thing\(bad == 1 ? "" : "s") to sort out first"
+            usedCarWhy = "Get these explained or priced before you agree to buy."
+        } else if warn > 0 {
+            usedCarHeadline = "\(warn) thing\(warn == 1 ? "" : "s") to ask about"
+            usedCarWhy = "Nothing failed outright, but ask the seller about these."
+        } else {
+            usedCarHeadline = "Nothing stood out"
+            usedCarWhy = "The computers didn't report a problem. A mechanic should still inspect it."
+        }
+    }
+
+    func runUsedCar() {
+        if isDemo {
+            applyUsedCar([
+                UsedCarRow(label: "VIN", value: vin, words: "Compare it to the title and the dash plate", level: .info),
+                UsedCarRow(label: "Check-engine light", value: "On", words: "Find out why before buying", level: .bad),
+                UsedCarRow(label: "Stored codes", value: "P0171, P0420", words: "Look these up before buying", level: .bad),
+                UsedCarRow(label: "Driven since codes were cleared", value: "42 miles", words: "Cleared recently. This can hide a problem", level: .warn),
+                UsedCarRow(label: "Smog self-tests unfinished", value: "Catalyst, Evaporative system (EVAP)", words: "Often means codes were cleared or the battery was off", level: .warn),
+            ])
+            return
+        }
+        runTest("Running the used car check…") { [weak self] e in
+            guard let self else { return }
+            let kmToMiles = 0.621371
+            func number(_ pid: UInt8) async -> Int? {
+                guard let d = try? await e.pid(pid), d.count >= 2 else { return nil }
+                return Int(d[0]) << 8 | Int(d[1])
+            }
+            var rows: [UsedCarRow] = []
+            let carVin = (try? await e.readVIN()) ?? ""
+            rows.append(carVin.count == 17
+                ? UsedCarRow(label: "VIN", value: carVin, words: "Compare it to the title and the dash plate", level: .info)
+                : UsedCarRow(label: "VIN", value: "Not reported", words: "Older vehicles may not report it. Check the dash plate", level: .warn))
+            if let d = try? await e.pid(0xA6), d.count >= 4 {
+                let km = d.prefix(4).reduce(0.0) { $0 * 256 + Double($1) } / 10
+                rows.append(UsedCarRow(label: "Odometer in the computer", value: "\(Int(km * kmToMiles).formatted()) miles", words: "Compare it to the dash", level: .info))
+            }
+            let ready = try await e.readiness()
+            if let ready {
+                let on = Readiness.decode(ready).milOn
+                rows.append(UsedCarRow(label: "Check-engine light", value: on ? "On" : "Off", words: on ? "Find out why before buying" : "Off", level: on ? .bad : .good))
+            }
+            let dtcs = try await e.readDTCs()
+            for (status, label, words, level) in [("Stored", "Stored codes", "Look these up before buying", UsedCarRow.Level.bad),
+                                                  ("Pending", "Pending codes", "Seen once, may come back", .warn),
+                                                  ("Permanent", "Permanent codes", "Only clear once the repair is proven", .bad)] {
+                let codes = Array(Set(dtcs.filter { $0.status == status }.map(\.code))).sorted()
+                rows.append(codes.isEmpty ? UsedCarRow(label: label, value: "None", words: "None", level: .good)
+                                          : UsedCarRow(label: label, value: codes.joined(separator: ", "), words: words, level: level))
+            }
+            let far = await number(0x31)
+            let warmups = (try? await e.pid(0x30))?.first.map(Int.init)
+            if let far {
+                let miles = Double(far) * kmToMiles
+                let recent = miles < 100 || (warmups ?? 99) < 10
+                rows.append(UsedCarRow(label: "Driven since codes were cleared", value: "\(Int(miles).formatted()) miles",
+                                       words: recent ? "Cleared recently. This can hide a problem" : "Not recently cleared", level: recent ? .warn : .good))
+            }
+            if let warmups { rows.append(UsedCarRow(label: "Warm-ups since codes were cleared", value: String(warmups), words: "Part of the same check", level: .info)) }
+            if let withLight = await number(0x21), withLight > 0 {
+                rows.append(UsedCarRow(label: "Driven with the light on", value: "\(Int(Double(withLight) * kmToMiles).formatted()) miles", words: "Ask why it wasn't fixed", level: .warn))
+            }
+            if let ready {
+                let open = Readiness.decode(ready).monitors.filter { !$0.continuous && $0.supported && $0.incomplete }.map(\.name)
+                rows.append(UsedCarRow(label: "Smog self-tests unfinished", value: open.isEmpty ? "None" : open.joined(separator: ", "),
+                                       words: open.isEmpty ? "All finished" : "Often means codes were cleared or the battery was off", level: open.isEmpty ? .good : .warn))
+            }
+            self.applyUsedCar(rows)
+        }
+    }
+
+    func toggleTrip() {
+        if tripRunning { stopTrip(); return }
+        trip = TripMeter()
+        if isDemo {
+            tripRunning = true
+            tripTask = Task { [weak self] in
+                var kmh = 0.0
+                while !Task.isCancelled {   // sample drive: from a stop to 100 km/h, then cruise
+                    self?.trip.update(now: Date(), kmh: kmh, maf: 6 + kmh / 6)
+                    kmh = min(kmh + 12, 105)
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                }
+            }
+            return
+        }
+        guard let e = elm, !busy else { return }
+        let live = pauseLive()
+        tripRunning = true
+        tripTask = Task { [weak self] in
+            await live?.value
+            while !Task.isCancelled {
+                guard let speed = try? await e.pid(0x0D), let kmh = speed.first else {
+                    try? await Task.sleep(nanoseconds: 200_000_000)
+                    continue
+                }
+                let air = try? await e.pid(0x10)
+                let maf = air.flatMap { $0.count >= 2 ? (Double($0[0]) * 256 + Double($0[1])) / 100 : nil }
+                self?.trip.update(now: Date(), kmh: Double(kmh), maf: maf)
+            }
+        }
+    }
+
+    func stopTrip() {
+        tripTask?.cancel()
+        tripTask = nil
+        tripRunning = false
+    }
+
+    func lookUpVin() {
+        guard vin.count == 17 else {
+            vinDetailsStatus = "Connect to a vehicle that reports its VIN first."
+            return
+        }
+        vinDetailsStatus = "Looking up the VIN…"
+        Task {
+            let found = try? await Recalls.vinDetails(vin)
+            vinDetails = found ?? []
+            vinDetailsStatus = (found ?? []).isEmpty ? "Couldn't look up the VIN. Check the internet connection and try again." : ""
         }
     }
 
@@ -634,6 +821,12 @@ struct VehiclePageView: View {
                     .padding(.vertical, 7)
                 }
             }
+            Button("VIN details") { reader.lookUpVin() }.buttonStyle(PillStyle())
+            if !reader.vinDetailsStatus.isEmpty { proText(reader.vinDetailsStatus, muted: true) }
+            ForEach(reader.vinDetails, id: \.0) { row in
+                Text("\(row.0): \(row.1)").font(.system(size: 13)).foregroundStyle(row.0 == "Warning" ? MacColor.red : MacColor.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             RoundCard(radius: 20) {
                 VStack(alignment: .leading, spacing: 8) {
                     proText("Safety recalls", size: 16, bold: true)
@@ -765,6 +958,87 @@ struct HelpView: View {
                     .padding(10)
                     .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(MacColor.line, lineWidth: 1))
             }
+        }
+    }
+}
+
+// MARK: - Used car check
+
+struct UsedCarView: View {
+    @EnvironmentObject var reader: Reader
+    private func colors(_ level: UsedCarRow.Level) -> (Color, Color) {
+        switch level {
+        case .good: return (MacColor.greenSoft, MacColor.green)
+        case .warn: return (MacColor.amberSoft, MacColor.amberInk)
+        case .bad:  return (MacColor.redSoft, MacColor.red)
+        case .info: return (MacColor.offSoft, MacColor.muted)
+        }
+    }
+    private var headlineColor: Color {
+        reader.usedCarRows.contains { $0.level == .bad } ? MacColor.red
+            : reader.usedCarRows.contains { $0.level == .warn } ? MacColor.amberInk : MacColor.green
+    }
+
+    var body: some View {
+        ProPage(title: "Used car check", subtitle: "What to know before you buy. It only reads from the vehicle and doesn't replace a mechanic's inspection.") {
+            if reader.connected {
+                Button("Run check") { reader.runUsedCar() }.buttonStyle(PillStyle(kind: .primary)).disabled(reader.busy)
+            } else {
+                EmptyStateCard(icon: "icon-vehicle", title: "Not connected yet", message: "Plug the adapter in, turn the key to ON, then connect to run the check.")
+            }
+            if reader.busy { BusyLine() }
+            if !reader.testMessage.isEmpty { proText(reader.testMessage, muted: true) }
+            if !reader.usedCarRows.isEmpty {
+                Text(reader.usedCarHeadline).font(.system(size: 20, weight: .bold)).foregroundStyle(headlineColor)
+                proText(reader.usedCarWhy)
+                ForEach(reader.usedCarRows) { row in
+                    RoundCard(radius: 16, padY: 12) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            proText(row.label, muted: true, size: 12)
+                            proText(row.value, size: 15, bold: true)
+                            Text(row.words).font(.system(size: 12, weight: .bold)).foregroundStyle(colors(row.level).1)
+                                .padding(.horizontal, 10).padding(.vertical, 3)
+                                .background(Capsule().fill(colors(row.level).0))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                proText("Also check recalls on the Vehicle page, and ask for service records.", muted: true, size: 12)
+            }
+        }
+    }
+}
+
+// MARK: - Trip
+
+struct TripView: View {
+    @EnvironmentObject var reader: Reader
+    private func card(_ value: String, _ label: String) -> some View {
+        RoundCard(radius: 16, padY: 10) {
+            VStack(alignment: .leading, spacing: 1) {
+                proText(value, size: 20, bold: true)
+                proText(label, muted: true, size: 12)
+            }
+        }
+    }
+    private func text(_ v: Double?, _ format: String) -> String { v.map { String(format: format, $0) } ?? "-" }
+
+    var body: some View {
+        ProPage(title: "Trip", subtitle: "Estimated fuel economy and a 0-60 mph timer. Fuel figures assume gasoline and need a mass air flow sensor.") {
+            if reader.connected {
+                Button(reader.tripRunning ? "Stop trip" : "Start trip") { reader.toggleTrip() }
+                    .buttonStyle(PillStyle(kind: .primary)).disabled(reader.busy && !reader.tripRunning)
+            } else {
+                EmptyStateCard(icon: "icon-gauge", title: "Not connected yet", message: "Connect to the vehicle to start a trip.")
+            }
+            Text("Have a passenger watch this. Only try the 0-60 timer on a closed course.")
+                .font(.system(size: 13)).foregroundStyle(MacColor.amberInk).fixedSize(horizontal: false, vertical: true)
+            card(text(reader.trip.instantMpg, "%.1f mpg"), "Right now")
+            card(text(reader.trip.averageMpg, "%.1f mpg"), "Trip average")
+            card(String(format: "%.2f miles", reader.trip.miles), "Trip distance")
+            card(String(format: "%.3f gallons", reader.trip.gallons), "Fuel used")
+            card(text(reader.trip.last060, "%.1f s"), "Last 0-60")
+            card(text(reader.trip.best060, "%.1f s"), "Best 0-60")
         }
     }
 }

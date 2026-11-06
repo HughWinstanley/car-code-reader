@@ -1,4 +1,4 @@
 {
-  "version": "2.13",
-  "notes": "New Tests, Service, Vehicle, History and Help pages, plus live graphs, recording, freeze frame and saved reports."
+  "version": "2.14",
+  "notes": "Used car check, Trip page with mpg and a 0-60 timer, VIN details, more live readings, and more tabs you can switch back to the original layout in Settings."
 }

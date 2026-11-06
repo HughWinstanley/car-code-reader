@@ -48,14 +48,28 @@ final class Reader: ObservableObject {
     @Published var semiStatus = ""
 
     // Connection choice
-    @Published var useBluetooth = false
-    @Published var host = "192.168.0.10"
-    @Published var port = "35000"
+    @Published var useBluetooth = UserDefaults.standard.bool(forKey: "useBluetooth") {
+        didSet { UserDefaults.standard.set(useBluetooth, forKey: "useBluetooth") }
+    }
+    @Published var host = UserDefaults.standard.string(forKey: "adapterHost") ?? "192.168.0.10" {
+        didSet { UserDefaults.standard.set(host, forKey: "adapterHost") }
+    }
+    @Published var port = UserDefaults.standard.string(forKey: "adapterPort") ?? "35000" {
+        didSet { UserDefaults.standard.set(port, forKey: "adapterPort") }
+    }
     @Published var make: Make = .other
     @Published var year: Int? = nil
     @Published var chosenName = ""
     @Published var chosenMake = ""
     @Published var chosenModel = ""
+    @Published var usedCarRows: [UsedCarRow] = []
+    @Published var usedCarHeadline = ""
+    @Published var usedCarWhy = ""
+    @Published var vinDetails: [(String, String)] = []
+    @Published var vinDetailsStatus = ""
+    @Published var tripRunning = false
+    @Published var trip = TripMeter()
+    var tripTask: Task<Void, Never>?
     @Published var selfTests: [SelfTest] = []
     @Published var moduleInfo: [ModuleInfo] = []
     @Published var freezeFrame: [(String, String)] = []
@@ -140,6 +154,8 @@ final class Reader: ObservableObject {
 
     private func clearPerVehicleResults() {
         selfTests = []; moduleInfo = []; freezeFrame = []; freezeFrameRead = false; testMessage = ""
+        usedCarRows = []; usedCarHeadline = ""; usedCarWhy = ""; vinDetails = []; vinDetailsStatus = ""
+        stopTrip(); trip = TripMeter()
         batteryRows = []; batteryPrompt = nil; batteryNote = ""
         recalls = nil; recallStatus = ""
         liveStats = [:]; liveSeries = [:]; graphKeys = []; recording = false; recordingRows = []
@@ -482,8 +498,11 @@ final class Reader: ObservableObject {
             return
         }
         guard let e = elm, !busy else { return }
+        let trip = tripTask
+        stopTrip()
         liveRunning = true
         liveTask = Task {
+            await trip?.value
             let supported = (try? await e.supportedPIDs()) ?? []
             let pids = supported.isEmpty ? PIDs.list : PIDs.list.filter { supported.contains($0.pid) }
             while !Task.isCancelled {
@@ -513,8 +532,9 @@ final class Reader: ObservableObject {
 
     /// Stop live data and hand back its task, so the caller can wait until it has really finished.
     func pauseLive() -> Task<Void, Never>? {
-        let task = liveTask
+        let task = liveTask ?? tripTask   // only one job can talk to the adapter at a time
         stopLive()
+        stopTrip()
         return task
     }
 

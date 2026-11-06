@@ -88,5 +88,13 @@ enum PIDs {
         p(0x61, "Driver's demand engine torque", 1, { Double($0[0]) - 125 }, "pct"),
         p(0x62, "Actual engine torque", 1, { Double($0[0]) - 125 }, "pct"),
         p(0x63, "Engine reference torque", 2, { Double($0[0]) * 256 + Double($0[1]) }, "nm"),
+        p(0x22, "Fuel rail pressure (relative)", 2, { (Double($0[0]) * 256 + Double($0[1])) * 0.079 }, "kpa"),
+        p(0x48, "Absolute throttle position C", 1, { Double($0[0]) * 100 / 255 }, "pct"),
+        p(0x4B, "Accelerator pedal position F", 1, { Double($0[0]) * 100 / 255 }, "pct"),
+        p(0x55, "Rear O2 short-term trim (bank 1)", 1, { (Double($0[0]) - 128) * 100 / 128 }, "pct"),
+        p(0x56, "Rear O2 long-term trim (bank 1)", 1, { (Double($0[0]) - 128) * 100 / 128 }, "pct"),
+        p(0x5A, "Relative accelerator pedal position", 1, { Double($0[0]) * 100 / 255 }, "pct"),
+        p(0x5D, "Fuel injection timing", 2, { (Double($0[0]) * 256 + Double($0[1]) - 26880) / 128 }, "deg"),
+        p(0xA6, "Odometer", 4, { $0.prefix(4).reduce(0.0) { $0 * 256 + Double($1) } / 10 }, "km"),
     ]
 }

@@ -67,6 +67,20 @@ def decode_vin(vin):
     return (make, model, year) if make and year else None
 
 
+def vin_details(vin):
+    """-> [(label, value)] from NHTSA's VIN decoder, including a warning if the VIN's check digit is wrong."""
+    d = _get(f"{VPIC}/DecodeVinValues/{urllib.parse.quote(vin)}?format=json")
+    r = (d.get("Results") or [{}])[0]
+    fields = (("Year", "ModelYear"), ("Make", "Make"), ("Model", "Model"), ("Trim", "Trim"), ("Body", "BodyClass"),
+              ("Engine size (liters)", "DisplacementL"), ("Cylinders", "EngineCylinders"), ("Fuel", "FuelTypePrimary"),
+              ("Drive", "DriveType"), ("Built in", "PlantCountry"))
+    out = [(label, r[key].title().replace("(Usa)", "(USA)") if key in ("Make", "Model", "PlantCountry") else r[key])
+           for label, key in fields if r.get(key)]
+    if "check digit" in (r.get("ErrorText") or "").lower():
+        out.append(("Warning", "The VIN's check digit doesn't add up. It may be misread or altered."))
+    return out
+
+
 def models_for(make, year):
     d = _get(f"{API}/products/vehicle/models?modelYear={year}&make={urllib.parse.quote(make.upper())}"
              f"&issueType=r")

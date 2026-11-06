@@ -180,3 +180,108 @@ def module_info(elm):
                 usage.append((name, f"ran {done} times in {chances} chances"))
         mod(ecu)["usage"] = usage
     return info
+
+
+# --- Used car check: everything here only reads from the vehicle -----------------------------------
+RECENT_CLEAR_MILES = 100   # codes cleared closer than this can hide a problem from a buyer
+RECENT_CLEAR_WARMUPS = 10
+KM_TO_MILES = 0.621371
+
+
+def used_car_verdict(rows):
+    """rows: (label, value, words, level) with level good, warn, bad or info -> (headline, explanation)."""
+    bad = [r for r in rows if r[3] == "bad"]
+    warn = [r for r in rows if r[3] == "warn"]
+    if bad:
+        return f"{len(bad)} thing{'s' if len(bad) != 1 else ''} to sort out first", \
+            "Get these explained or priced before you agree to buy."
+    if warn:
+        return f"{len(warn)} thing{'s' if len(warn) != 1 else ''} to ask about", \
+            "Nothing failed outright, but ask the seller about these."
+    return "Nothing stood out", "The computers didn't report a problem. A mechanic should still inspect it."
+
+
+def used_car_check(elm):
+    """Read what a buyer wants to know. -> (rows, headline, explanation)"""
+    from obd_core import decode_readiness
+
+    def number(pid):
+        d = elm.query_pid(1, pid)
+        return int.from_bytes(d[:2], "big") if d and len(d) >= 2 else None
+
+    rows = []
+    vin = elm.read_vin() or ""
+    rows.append(("VIN", vin, "Compare it to the title and the dash plate", "info") if len(vin) == 17 else
+                ("VIN", "Not reported", "Older vehicles may not report it. Check the dash plate", "warn"))
+    d = elm.query_pid(1, 0xA6)
+    if d and len(d) >= 4:
+        miles = int.from_bytes(d[:4], "big") / 10 * KM_TO_MILES
+        rows.append(("Odometer in the computer", f"{miles:,.0f} miles", "Compare it to the dash", "info"))
+    ready = elm.query_pid(1, 1)
+    mil_on, not_ready = None, []
+    if ready and len(ready) >= 4:
+        mil_on, _count, _diesel, monitors = decode_readiness(ready)
+        not_ready = [m[0] for m in monitors[3:] if m[1] and m[2]]
+        rows.append(("Check-engine light", "On" if mil_on else "Off",
+                     "Find out why before buying" if mil_on else "Off", "bad" if mil_on else "good"))
+    for mode, label, level, words in (("03", "Stored codes", "bad", "Look these up before buying"),
+                                      ("07", "Pending codes", "warn", "Seen once, may come back"),
+                                      ("0A", "Permanent codes", "bad", "Only clear once the repair is proven")):
+        codes = sorted({c for _e, c in elm.read_dtcs(mode)})
+        rows.append((label, ", ".join(codes), words, level) if codes else (label, "None", "None", "good"))
+    far, warm = number(0x31), elm.query_pid(1, 0x30)
+    warmups = warm[0] if warm else None
+    if far is not None:
+        miles = far * KM_TO_MILES
+        recent = miles < RECENT_CLEAR_MILES or (warmups is not None and warmups < RECENT_CLEAR_WARMUPS)
+        rows.append(("Driven since codes were cleared", f"{miles:,.0f} miles",
+                     "Cleared recently. This can hide a problem" if recent else "Not recently cleared",
+                     "warn" if recent else "good"))
+    if warmups is not None:
+        rows.append(("Warm-ups since codes were cleared", str(warmups), "Part of the same check", "info"))
+    with_light = number(0x21)
+    if with_light:
+        rows.append(("Driven with the light on", f"{with_light * KM_TO_MILES:,.0f} miles", "Ask why it wasn't fixed", "warn"))
+    if ready and len(ready) >= 4:
+        rows.append(("Smog self-tests unfinished", ", ".join(not_ready) if not_ready else "None",
+                     "Often means codes were cleared or the battery was off" if not_ready else "All finished",
+                     "warn" if not_ready else "good"))
+    return (rows,) + used_car_verdict(rows)
+
+
+# --- Trip meter: fuel economy from the air the engine uses, and a 0-60 timer -------------------------
+GRAMS_PER_GALLON = 2801.18   # gasoline, 6.17 lb per gallon
+AIR_FUEL = 14.7
+MPH_60_IN_KMH = 96.56
+
+
+class TripMeter:
+    """Feed it speed and mass air flow over time. Fuel figures are gasoline estimates."""
+
+    def __init__(self):
+        self.miles = self.gallons = 0.0
+        self.instant_mpg = None
+        self.best_0_60 = self.last_0_60 = None
+        self._last, self._armed, self._launch = None, False, None
+
+    def update(self, now, kmh, maf=None):
+        if self._last is not None:
+            dt = now - self._last
+            self.miles += kmh * KM_TO_MILES * dt / 3600
+            if maf:
+                self.gallons += maf / AIR_FUEL / GRAMS_PER_GALLON * dt
+        self._last = now
+        self.instant_mpg = (kmh * KM_TO_MILES) / (maf * 3600 / AIR_FUEL / GRAMS_PER_GALLON) if maf else None
+        if kmh < 1:
+            self._armed, self._launch = True, None
+        elif self._armed:
+            if self._launch is None:
+                self._launch = now
+            if kmh >= MPH_60_IN_KMH:
+                self.last_0_60 = now - self._launch
+                self.best_0_60 = min(self.best_0_60 or self.last_0_60, self.last_0_60)
+                self._armed, self._launch = False, None
+
+    @property
+    def average_mpg(self):
+        return self.miles / self.gallons if self.gallons else None

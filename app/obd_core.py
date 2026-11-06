@@ -93,6 +93,14 @@ PIDS = {
     0x61: ("Driver's demand engine torque", lambda d: d[0] - 125, "%"),
     0x62: ("Actual engine torque", lambda d: d[0] - 125, "%"),
     0x63: ("Engine reference torque", lambda d: d[0] * 256 + d[1], "Nm"),
+    0x22: ("Fuel rail pressure (relative)", lambda d: (d[0] * 256 + d[1]) * 0.079, "kPa"),
+    0x48: ("Absolute throttle position C", lambda d: d[0] * 100 / 255, "%"),
+    0x4B: ("Accelerator pedal position F", lambda d: d[0] * 100 / 255, "%"),
+    0x55: ("Rear O2 short-term trim (bank 1)", lambda d: (d[0] - 128) * 100 / 128, "%"),
+    0x56: ("Rear O2 long-term trim (bank 1)", lambda d: (d[0] - 128) * 100 / 128, "%"),
+    0x5A: ("Relative accelerator pedal position", lambda d: d[0] * 100 / 255, "%"),
+    0x5D: ("Fuel injection timing", lambda d: (d[0] * 256 + d[1] - 26880) / 128, "°"),
+    0xA6: ("Odometer", lambda d: int.from_bytes(d[:4], "big") / 10, "km"),
 }
 
 
@@ -811,7 +819,7 @@ class ELM327:
         if self._supported is not None:
             return self._supported
         sup = set()
-        for base in (0x00, 0x20, 0x40):
+        for base in (0x00, 0x20, 0x40, 0x60, 0x80, 0xA0):
             if base and base not in sup:
                 break
             for d in self.query_pid_all(1, base).values():

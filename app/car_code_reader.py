@@ -51,26 +51,46 @@ CONN_AUTO = "Find my adapter automatically"
 
 # --- Appearance: follow the computer, or always light or dark. Read once at start-up ---------
 APPEARANCES = ("Automatic", "Light", "Dark")
+LAYOUTS = ("Organized", "Original")
+NAV_GROUPS = (("Check", ("Home", "Problems", "Live data", "Smog check")),
+              ("Tools", ("Tests", "Service", "Used car", "Trip")),
+              ("Info", ("Vehicle", "History", "Help")))
 
 
 def _settings_path():
     return os.path.join(os.path.dirname(updater.updates_dir()), "settings.json")
 
 
-def load_appearance():
+def _load_settings():
     try:
         with open(_settings_path(), encoding="utf-8") as f:
-            choice = json.load(f).get("appearance")
-    except (OSError, ValueError, AttributeError):
-        return "Automatic"
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_setting(key, value):
+    data = _load_settings()
+    data[key] = value
+    path = _settings_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+
+def load_appearance():
+    choice = _load_settings().get("appearance")
     return choice if choice in APPEARANCES else "Automatic"
 
 
 def save_appearance(choice):
-    path = _settings_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump({"appearance": choice}, f)
+    _save_setting("appearance", choice)
+
+
+def load_layout():
+    choice = _load_settings().get("layout")
+    return choice if choice in LAYOUTS else "Organized"
 
 
 def system_is_dark():
@@ -90,6 +110,7 @@ def system_is_dark():
 
 
 APPEARANCE = load_appearance()
+LAYOUT = load_layout()
 DARK = APPEARANCE == "Dark" or (APPEARANCE == "Automatic" and system_is_dark())
 
 # --- Palette: paper and ink. Color is kept only for status (red, amber, green) ----------------
@@ -146,6 +167,7 @@ TINT = {"engine": "#E08A00", "safety": "#D9362B", "scan": "#6C4BD1", "gauge": "#
 PAGE_ICON = {"Home": ("home", "home"), "Problems": ("alert", "engine"), "Live data": ("gauge", "gauge"),
              "Smog check": ("smog", "smog"), "Tests": ("scan", "scan"), "Vehicle": ("vehicle", "vehicle"),
              "Service": ("wrench", "service"), "History": ("history", "history"),
+             "Used car": ("vehicle", "semi"), "Trip": ("gauge", "battery"),
              "Help": ("help", "help")}
 
 _FONTS = {}
@@ -653,13 +675,14 @@ class ProblemRow(RoundPanel):
 # The app
 # ----------------------------------------------------------------------------
 class App:
-    PAGES = ["Home", "Problems", "Live data", "Smog check", "Tests", "Service", "Vehicle", "History", "Help"]
+    PAGES = ["Home", "Problems", "Live data", "Smog check", "Tests", "Service", "Used car", "Trip", "Vehicle", "History",
+             "Help"]
 
     def __init__(self, root):
         self.root = root
         root.title(APP_NAME)
         root.geometry("1120x740")
-        root.minsize(900, 600)
+        root.minsize(900, 680)
         root.configure(bg=C["page"])
         if IS_MAC:  # title bar and dialogs match the chosen appearance (needs a newer Tk; harmless otherwise)
             try:
@@ -800,9 +823,13 @@ class App:
         side.pack_propagate(False)
         tk.Frame(body, bg=C["line"], width=1).pack(side="left", fill="y")
         self.nav = {}
+        headings = {names[0]: title for title, names in NAV_GROUPS} if LAYOUT == "Organized" else {}
         for name in self.PAGES:
-            item = tk.Canvas(side, width=176, height=46, bg=C["side"], highlightthickness=0, cursor="hand2")
-            item.pack(padx=12, pady=2, anchor="w")
+            if name in headings:
+                tk.Label(side, text=headings[name].upper(), bg=C["side"], fg=C["muted"], font=F(11, "bold"),
+                         anchor="w").pack(fill="x", padx=20, pady=(6 if name != "Home" else 0, 1))
+            item = tk.Canvas(side, width=176, height=44, bg=C["side"], highlightthickness=0, cursor="hand2")
+            item.pack(padx=12, pady=1, anchor="w")
             bind_click(item, lambda n=name: self.show_page(n))
             item.bind("<Enter>", lambda e, n=name: self._nav_draw(n, hover=True))
             item.bind("<Leave>", lambda e, n=name: self._nav_draw(n))
@@ -819,6 +846,8 @@ class App:
             "Smog check": self._build_smog(),
             "Tests": self._build_tests(),
             "Service": self._build_service(),
+            "Used car": self._build_used_car(),
+            "Trip": self._build_trip(),
             "Vehicle": self._build_vehicle(),
             "History": self._build_history(),
             "Help": self._build_help(),
@@ -2203,6 +2232,9 @@ class App:
         self.info_btn = PillButton(bar, "Refresh", self.refresh_info)
         self.info_btn.pack(side="left")
         self.page_buttons.append(self.info_btn)
+        PillButton(bar, "VIN details", self.show_vin_details).pack(side="left", padx=(10, 0))
+        self.vin_details_box = tk.Frame(page, bg=C["page"])
+        self.vin_details_box.pack(fill="x", pady=(8, 0))
 
         # Safety recalls, from the government's free database (works without the adapter)
         rec = tk.Frame(page, bg=C["page"])
@@ -2226,6 +2258,30 @@ class App:
         self.recall_area.pack(fill="both", expand=True)
         self._recalls_for = None
         return page
+
+    def show_vin_details(self):
+        box = self.vin_details_box
+        self._clear(box)
+        vin = self._recall_vehicle()[3]
+        if not vin:
+            self._line(box, "Connect to a vehicle that reports its VIN first.", color=C["muted"])
+            return
+        self._line(box, "Looking up the VIN…", color=C["muted"])
+
+        def show(rows, failed):
+            self._clear(box)
+            if failed or not rows:
+                self._line(box, "Couldn't look up the VIN. Check the internet connection and try again.", color=C["muted"])
+            for label, value in rows:
+                self._line(box, f"{label}: {value}", color=C["red"] if label == "Warning" else None, pady=(1, 0))
+
+        def work():
+            try:
+                rows, failed = recalls.vin_details(vin), False
+            except Exception:  # noqa: BLE001 - offline or the database is busy
+                rows, failed = [], True
+            self.ui(lambda: show(rows, failed))
+        threading.Thread(target=work, daemon=True).start()
 
     def _recall_vehicle(self):
         """-> (make, model, year, vin, name) of the vehicle to look up; any part may be empty."""
@@ -2668,6 +2724,119 @@ class App:
         self._pill(row, verdict, good).pack(side="left")
         self.batt.setdefault("verdicts", []).append((label, value, verdict, good))
 
+    # --- Used car page -------------------------------------------------------------------------------
+    def _build_used_car(self):
+        page = tk.Frame(self.main, bg=C["page"])
+        self._page_title(page, "Used car check", "What to know before you buy. It only reads from the vehicle and "
+                                                 "doesn't replace a mechanic's inspection.", icon=PAGE_ICON["Used car"])
+        bar = tk.Frame(page, bg=C["page"])
+        bar.pack(fill="x")
+        self.used_btn = PillButton(bar, "Run check", self.run_used_car, kind="primary")
+        self.used_btn.pack(side="left")
+        self.page_buttons.append(self.used_btn)
+        self.used_area = ScrollArea(page, C["page"])
+        self.used_area.pack(fill="both", expand=True, pady=(16, 0))
+        return page
+
+    def run_used_car(self):
+        if self.elm and self.elm.is_j1939:
+            messagebox.showinfo(APP_NAME, "The used car check is for cars and light trucks, not the 9-pin truck port.")
+            return
+
+        def done(result):
+            rows, headline, why = result
+            self.used_area.clear()
+            inner = self.used_area.inner
+            bad = any(r[3] == "bad" for r in rows)
+            warn = any(r[3] == "warn" for r in rows)
+            self._line(inner, headline, bold=True, size=20, color=C["red"] if bad else C["amber_ink"] if warn else C["green"])
+            self._line(inner, why, pady=(2, 12))
+            pills = {"good": (C["green_soft"], C["green"]), "warn": (C["amber_soft"], C["amber_ink"]),
+                     "bad": (C["red_soft"], C["red"]), "info": (C["off_soft"], C["muted"])}
+            for label, value, words, level in rows:
+                card = RoundPanel(inner, pad=(20, 12), radius=16)
+                card.pack(fill="x", pady=(0, 8))
+                self._line(card.inner, label, size=12, color=C["muted"], pady=0)
+                self._line(card.inner, value, bold=True, size=15, pady=(1, 3))
+                bg, fg = pills[level]
+                tk.Label(card.inner, text=words, bg=bg, fg=fg, font=F(12, "bold"), padx=10, pady=3).pack(anchor="w")
+            self._line(inner, "Also check recalls on the Vehicle page, and ask for service records.", color=C["muted"],
+                       size=12, pady=(6, 0))
+        self.run_bg(lambda: advanced.used_car_check(self.elm), done, "Running the used car check…")
+
+    # --- Trip page -----------------------------------------------------------------------------------
+    def _build_trip(self):
+        page = tk.Frame(self.main, bg=C["page"])
+        self._page_title(page, "Trip", "Estimated fuel economy and a 0-60 mph timer. Fuel figures assume gasoline and "
+                                       "need a mass air flow sensor.", icon=PAGE_ICON["Trip"])
+        self.trip_btn = PillButton(page, "Start trip", self.toggle_trip, kind="primary")
+        self.trip_btn.pack(anchor="w")
+        self.trip_running, self.trip_stop = False, threading.Event()
+        self.trip_note = tk.Label(page, text="Have a passenger watch this. Only try the 0-60 timer on a closed course.",
+                                  bg=C["page"], fg=C["amber_ink"], font=F(13), anchor="w", justify="left")
+        self.trip_note.pack(fill="x", pady=(10, 12))
+        self.trip_vars = {}
+        for key, label in (("instant", "Right now"), ("average", "Trip average"), ("miles", "Trip distance"),
+                           ("gallons", "Fuel used"), ("last", "Last 0-60"), ("best", "Best 0-60")):
+            card = RoundPanel(page, pad=(20, 10), radius=16)
+            card.pack(fill="x", pady=(0, 8))
+            v = tk.StringVar(value="-")
+            tk.Label(card.inner, textvariable=v, bg=C["panel"], fg=C["ink"], font=F(20, "bold"), anchor="w").pack(fill="x")
+            tk.Label(card.inner, text=label, bg=C["panel"], fg=C["muted"], font=F(12), anchor="w").pack(fill="x")
+            self.trip_vars[key] = v
+        return page
+
+    def _show_trip(self, m):
+        v = self.trip_vars
+        v["instant"].set(f"{m.instant_mpg:.1f} mpg" if m.instant_mpg is not None else "-")
+        v["average"].set(f"{m.average_mpg:.1f} mpg" if m.average_mpg is not None else "-")
+        v["miles"].set(f"{m.miles:.2f} miles")
+        v["gallons"].set(f"{m.gallons:.3f} gallons")
+        v["last"].set(f"{m.last_0_60:.1f} s" if m.last_0_60 else "-")
+        v["best"].set(f"{m.best_0_60:.1f} s" if m.best_0_60 else "-")
+
+    def toggle_trip(self):
+        if self.trip_running:
+            self.trip_stop.set()
+            return
+        elm = self.elm
+        if not elm:
+            self.trip_note.configure(text="Connect to the vehicle first.")
+            return
+        if self.busy:
+            return
+        if elm.is_j1939:
+            messagebox.showinfo(APP_NAME, "Trip needs readings that trucks on the 9-pin port report differently.")
+            return
+        self.trip_stop.clear()
+        self.trip_running, self.busy = True, True
+        self.trip_btn.set_text("Stop trip")
+        self._update_controls()
+        meter = advanced.TripMeter()
+
+        def worker():
+            try:
+                while not self.trip_stop.is_set():
+                    speed, air = elm.query_pid(1, 0x0D), elm.query_pid(1, 0x10)
+                    if speed:
+                        maf = (air[0] * 256 + air[1]) / 100 if air and len(air) >= 2 else None
+                        meter.update(time.time(), speed[0], maf)
+                        self.ui(lambda: self._show_trip(meter))
+                    else:
+                        time.sleep(0.2)
+            except Exception as e:  # noqa: BLE001
+                msg = str(e)
+                self.ui(lambda: messagebox.showerror(APP_NAME, f"Trip stopped: {msg}"))
+            finally:
+                self.ui(self._trip_ended)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _trip_ended(self):
+        self.trip_running, self.busy = False, False
+        self.trip_btn.set_text("Start trip")
+        self._update_controls()
+
     # --- History page --------------------------------------------------------------------------------
     def _save_history(self):
         v = self.vehicle or {}
@@ -2844,6 +3013,12 @@ class App:
         for choice in APPEARANCES:
             PillButton(look, choice, lambda c=choice: self._set_appearance(c),
                        kind="primary" if choice == APPEARANCE else "secondary").pack(side="left", padx=(0, 8))
+        arrange = tk.Frame(page, bg=C["page"])
+        arrange.pack(fill="x", pady=(0, 12))
+        tk.Label(arrange, text="Layout", bg=C["page"], fg=C["ink"], font=F(13, "bold")).pack(side="left", padx=(0, 12))
+        for choice in LAYOUTS:
+            PillButton(arrange, choice, lambda c=choice: self._set_layout(c),
+                       kind="primary" if choice == LAYOUT else "secondary").pack(side="left", padx=(0, 8))
         ver = tk.Frame(page, bg=C["page"])
         ver.pack(fill="x", pady=(0, 12))
         tk.Label(ver, text=f"Version {VERSION}", bg=C["page"], fg=C["ink"], font=F(13, "bold")).pack(side="left")
@@ -2862,10 +3037,17 @@ class App:
                                     fg=C["ink"], insertbackground=C["ink"])
         return page
 
+    def _set_layout(self, choice):
+        if choice != LAYOUT:
+            _save_setting("layout", choice)
+            self._offer_restart(choice)
+
     def _set_appearance(self, choice):
-        if choice == APPEARANCE:
-            return
-        save_appearance(choice)
+        if choice != APPEARANCE:
+            save_appearance(choice)
+            self._offer_restart(choice)
+
+    def _offer_restart(self, choice):
         if self.busy or not messagebox.askyesno(APP_NAME, f"Restart now to use {choice}?"):
             messagebox.showinfo(APP_NAME, f"{choice} will be used the next time you open the app.")
             return
