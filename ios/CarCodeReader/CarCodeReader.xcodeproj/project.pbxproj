@@ -15,6 +15,7 @@
 		25A352301275A84932B009B8 /* Readiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AFE5B52EE8432CF7FAA0D2A /* Readiness.swift */; };
 		3915187191D224297F783863 /* WifiLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19057ACA9E79FF9AB3DCEFCA /* WifiLink.swift */; };
 		A1C4E7F20B3D596870ACD111 /* UpdateCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C4E7F20B3D596870ACD222 /* UpdateCheck.swift */; };
+		A1C4E7F20B3D596870ACD777 /* RepairSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C4E7F20B3D596870ACD888 /* RepairSearch.swift */; };
 		A1C4E7F20B3D596870ACD333 /* ProFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C4E7F20B3D596870ACD444 /* ProFeatures.swift */; };
 		A1C4E7F20B3D596870ACD555 /* ProData.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C4E7F20B3D596870ACD666 /* ProData.swift */; };
 		70EE588C003629B12094698A /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39AAA60214B0F4739A7AFFF2 /* ContentView.swift */; };
@@ -33,6 +34,7 @@
 		0FE63F923D748A14A9968E3C /* Semi.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Semi.swift; sourceTree = "<group>"; };
 		19057ACA9E79FF9AB3DCEFCA /* WifiLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WifiLink.swift; sourceTree = "<group>"; };
 		A1C4E7F20B3D596870ACD222 /* UpdateCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateCheck.swift; sourceTree = "<group>"; };
+		A1C4E7F20B3D596870ACD888 /* RepairSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepairSearch.swift; sourceTree = "<group>"; };
 		A1C4E7F20B3D596870ACD444 /* ProFeatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProFeatures.swift; sourceTree = "<group>"; };
 		A1C4E7F20B3D596870ACD666 /* ProData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProData.swift; sourceTree = "<group>"; };
 		255D1FE58E2386F38D9AE609 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -80,6 +82,7 @@
 				CF520B3632CAC4A64D74FF9E /* OBDLink.swift */,
 				19057ACA9E79FF9AB3DCEFCA /* WifiLink.swift */,
 				A1C4E7F20B3D596870ACD222 /* UpdateCheck.swift */,
+				A1C4E7F20B3D596870ACD888 /* RepairSearch.swift */,
 				A1C4E7F20B3D596870ACD444 /* ProFeatures.swift */,
 				A1C4E7F20B3D596870ACD666 /* ProData.swift */,
 				638CF2ECF996025D897A67B0 /* BLELink.swift */,
@@ -180,6 +183,7 @@
 				FB147E7C28E1D728161C44DB /* OBDLink.swift in Sources */,
 				3915187191D224297F783863 /* WifiLink.swift in Sources */,
 				A1C4E7F20B3D596870ACD111 /* UpdateCheck.swift in Sources */,
+				A1C4E7F20B3D596870ACD777 /* RepairSearch.swift in Sources */,
 				A1C4E7F20B3D596870ACD333 /* ProFeatures.swift in Sources */,
 				A1C4E7F20B3D596870ACD555 /* ProData.swift in Sources */,
 				B6A2233D6B55279F8C33474B /* BLELink.swift in Sources */,
@@ -218,7 +222,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				MARKETING_VERSION = 2.16;
+				MARKETING_VERSION = 2.17;
 				PRODUCT_BUNDLE_IDENTIFIER = com.carcodereader.CarCodeReader;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -287,7 +291,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
-				MARKETING_VERSION = 2.16;
+				MARKETING_VERSION = 2.17;
 				PRODUCT_BUNDLE_IDENTIFIER = com.carcodereader.CarCodeReader;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;

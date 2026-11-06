@@ -636,7 +636,7 @@ struct ProPage<Content: View>: View {
     }
 }
 
-private func proText(_ text: String, muted: Bool = false, size: CGFloat = 13, bold: Bool = false) -> some View {
+func proText(_ text: String, muted: Bool = false, size: CGFloat = 13, bold: Bool = false) -> some View {
     Text(text).scaledFont(size, weight: bold ? .bold : .regular)
         .foregroundStyle(muted ? MacColor.muted : MacColor.ink)
         .fixedSize(horizontal: false, vertical: true)
@@ -671,12 +671,8 @@ struct TestsView: View {
     }
 
     private func lookup() {
-        var code = codeEntry.uppercased().filter { $0.isLetter || $0.isNumber }
-        if code.count == 5, let first = code.first {   // people often type the letter O for zero
-            code = String(first) + code.dropFirst().replacingOccurrences(of: "O", with: "0").replacingOccurrences(of: "I", with: "1")
-        }
-        codeEntry = code
-        lookedUp = code
+        if let code = RepairSearch.cleanCode(codeEntry) { codeEntry = code }
+        lookedUp = codeEntry.uppercased()
     }
 
     var body: some View {
@@ -685,26 +681,7 @@ struct TestsView: View {
             if reader.busy { BusyLine() }
             if !reader.testMessage.isEmpty { proText(reader.testMessage, muted: true) }
 
-            section("Battery and charging test", "Checks the battery at rest, how far it drops while starting, and whether the alternator charges at idle and at 2,000 rpm. Takes about a minute.") {
-                Button("Start test") { reader.batteryStart() }.buttonStyle(PillStyle(kind: .primary)).disabled(!ready)
-                ForEach(reader.batteryRows) { r in
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 1) {
-                            proText(r.label)
-                            proText(r.value, size: 16, bold: true)
-                        }
-                        Spacer(minLength: 8)
-                        Text(r.verdict).scaledFont(12, weight: .bold)
-                            .foregroundStyle(r.good ? MacColor.green : MacColor.red)
-                            .multilineTextAlignment(.trailing)
-                    }
-                }
-                if let prompt = reader.batteryPrompt {
-                    proText(prompt, bold: true)
-                    Button("Ready") { reader.batteryReady() }.buttonStyle(PillStyle(kind: .primary)).disabled(reader.busy)
-                }
-                if !reader.batteryNote.isEmpty { proText(reader.batteryNote, muted: true, size: 12) }
-            }
+            BatteryCard()
 
             section("Self-test results and misfire counts", "The numbers behind each emissions self-test with its pass/fail limits, and misfire counts for each cylinder. Most 2008 and newer vehicles.") {
                 Button("Read results") { reader.readSelfTests() }.buttonStyle(PillStyle(kind: .primary)).disabled(!ready)
@@ -764,42 +741,45 @@ struct TestsView: View {
     }
 }
 
+/// The battery and charging test, shared by Tests and the Battery test box on Home.
+struct BatteryCard: View {
+    @EnvironmentObject var reader: Reader
+    var body: some View {
+        RoundCard(radius: 20) {
+            VStack(alignment: .leading, spacing: 8) {
+                proText("Battery and charging test", size: 16, bold: true)
+                proText("Checks the battery at rest, how far it drops while starting, and whether the alternator charges at idle and at 2,000 rpm. Takes about a minute.", muted: true)
+                Button("Start test") { reader.batteryStart() }.buttonStyle(PillStyle(kind: .primary))
+                    .disabled(!reader.connected || reader.busy)
+                ForEach(reader.batteryRows) { r in
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            proText(r.label)
+                            proText(r.value, size: 16, bold: true)
+                        }
+                        Spacer(minLength: 8)
+                        Text(r.verdict).scaledFont(12, weight: .bold)
+                            .foregroundStyle(r.good ? MacColor.green : MacColor.red)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+                if let prompt = reader.batteryPrompt {
+                    proText(prompt, bold: true)
+                    Button("Ready") { reader.batteryReady() }.buttonStyle(PillStyle(kind: .primary)).disabled(reader.busy)
+                }
+                if !reader.batteryNote.isEmpty { proText(reader.batteryNote, muted: true, size: 12) }
+            }
+        }
+    }
+}
+
 // MARK: - Service guides
 
 struct ServiceView: View {
-    @EnvironmentObject var reader: Reader
-    @State private var open: String? = nil
-
-    private var guides: [ServiceGuide] {
-        let family: String? = reader.make == .ford ? "ford" : reader.make == .gm ? "gm" : nil
-        guard let family else { return ProData.guides }
-        return ProData.guides.filter { $0.family == family } + ProData.guides.filter { $0.family == nil }
-    }
-
     var body: some View {
-        ProPage(title: "Service", subtitle: "Relearns, resets and brake bleeding you can do by hand. Tap one to see the steps.") {
-            ForEach(guides, id: \.title) { g in
-                RoundCard(radius: 16) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        proText(g.title, size: 15, bold: true)
-                        proText(g.applies, muted: true, size: 12)
-                        if open == g.title {
-                            if !g.needs.isEmpty { proText("You'll need: " + g.needs) }
-                            ForEach(Array(g.steps.enumerated()), id: \.offset) { i, step in
-                                HStack(alignment: .top, spacing: 10) {
-                                    StepDot(number: i + 1, fill: MacTint.vehicle.opacity(0.15), text: Color(light: "#1F6FD1", dark: "#7DB3F2"))
-                                    proText(step)
-                                }
-                            }
-                            if !g.note.isEmpty { proText(g.note, muted: true, size: 12) }
-                        }
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture { withAnimation(.easeInOut(duration: 0.2)) { open = open == g.title ? nil : g.title } }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityAddTraits(.isButton)
-                }
-            }
+        ProPage(title: "Service", subtitle: "Search how to fix something, or look up a code.") {
+            SearchBars()
         }
     }
 }
@@ -834,7 +814,7 @@ struct VehiclePageView: View {
                     proText("Safety recalls", size: 16, bold: true)
                     proText("From the U.S. government's free NHTSA database. Dealers repair recalls free.", muted: true)
                     if reader.vin.count != 17 && (reader.chosenMake.isEmpty || reader.chosenModel.isEmpty) {
-                        proText("Choose a vehicle on Home, or connect to one, so the app knows which recalls to look up.", muted: true)
+                        proText("Choose a vehicle in Diagnostics, or connect to one, so the app knows which recalls to look up.", muted: true)
                     } else {
                         Button("Check for recalls") { reader.checkRecalls() }.buttonStyle(PillStyle(kind: .primary))
                     }
@@ -926,7 +906,7 @@ struct HelpView: View {
     private let steps = [
         "Plug the adapter into the OBD port under the dashboard, near the steering column.",
         "Turn the key to ON. The engine can be off or running.",
-        "On Home, tap Engine codes, ABS and airbag, or Full scan. The app connects by itself.",
+        "Open Diagnostics and tap Full scan. The app connects by itself. For a semi truck, pick it in Choose vehicle first.",
         "Tap any problem to see what it means, how urgent it is, and what usually fixes it.",
         "To clear codes, turn the engine off and leave the key on first.",
     ]
@@ -1047,13 +1027,291 @@ struct TripView: View {
     }
 }
 
+// MARK: - Home boxes
+
+/// The first page: the same tiles as the folders inside it, so the whole app looks like one set.
+struct Launcher: View {
+    @Binding var selection: Tab
+    var body: some View {
+        Grid(horizontalSpacing: 12, verticalSpacing: 12) {
+            GridRow {
+                NavigationLink { DiagnosticsView(selection: $selection) } label: {
+                    TileCard(title: "Diagnostics", subtitle: "Read codes, live data and tests") {
+                        Image("icon-engine").resizable().scaledToFit().frame(height: 72).accessibilityHidden(true)
+                    }
+                }.buttonStyle(.plain)
+                NavigationLink { ServiceView() } label: {
+                    SymbolTile(title: "Service", subtitle: "Search how to fix things", symbol: "wrench.and.screwdriver.fill", tint: MacTint.safety)
+                }.buttonStyle(.plain)
+            }
+            GridRow {
+                NavigationLink { DataManagerView() } label: {
+                    SymbolTile(title: "Data manager", subtitle: "History, reports and recordings", symbol: "folder.fill", tint: Color(light: "#7A5A2E", dark: "#C49A5E"))
+                }.buttonStyle(.plain)
+                NavigationLink { BatteryTestView() } label: {
+                    SymbolTile(title: "Battery test", subtitle: "Battery and charging check", symbol: "minus.plus.batteryblock.fill", tint: MacTint.smog)
+                }.buttonStyle(.plain)
+            }
+            GridRow {
+                Button { selection = .settings } label: {
+                    SymbolTile(title: "Settings", subtitle: "Appearance and your adapter", symbol: "gearshape.fill", tint: Color(light: "#5E7488", dark: "#8FA3B5"))
+                }.buttonStyle(.plain)
+                NavigationLink { UpdateView() } label: {
+                    SymbolTile(title: "Update", subtitle: "Check for a newer version", symbol: "arrow.down.circle.fill", tint: MacTint.vehicle)
+                }.buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+/// The main checks, used by the Diagnostics folder and by the Original layout's Home.
+struct DiagnosticsRows: View {
+    @EnvironmentObject var reader: Reader
+    @Binding var selection: Tab
+    @Binding var showPicker: Bool
+    @State private var showTruck = false
+
+    private func startScan(_ kind: ScanKind) {
+        if reader.chosenIsTruck {   // semi trucks read over J1939, on their own page
+            reader.readTruck()
+            showTruck = true
+            return
+        }
+        if reader.truckMode { reader.disconnect() }
+        reader.scanKind = kind
+        if reader.connected { reader.scan() } else { reader.connect() }
+        selection = .problems
+    }
+
+    private func tile(_ title: String, _ subtitle: String, _ icon: String) -> some View {
+        TileCard(title: title, subtitle: subtitle) {
+            Image(icon).resizable().scaledToFit().frame(height: 72).accessibilityHidden(true)
+        }
+    }
+
+    var body: some View {
+        // Order matches the Mac app's home screen.
+        GridRow {
+            Button { startScan(.all) } label: {
+                tile("Full scan", "Engine, ABS and airbag codes", "icon-scan")
+            }
+            .buttonStyle(.plain)
+            .navigationDestination(isPresented: $showTruck) { SemiView() }
+            Button { showPicker = true } label: {
+                tile("Choose vehicle", "Cars, trucks and semi trucks", "icon-vehicle")
+            }.buttonStyle(.plain)
+        }
+        GridRow {
+            Button { selection = .live } label: {
+                tile("Live data", "Engine readings in real time", "icon-gauge")
+            }.buttonStyle(.plain)
+            Button { selection = .smog } label: {
+                tile("Smog check", "Ready for an emissions test?", "icon-smog")
+            }.buttonStyle(.plain)
+        }
+        GridRow {
+            NavigationLink { OBD1View() } label: {
+                tile("OBD-I", "Blink codes (1995 & older), no adapter", "icon-blink")
+            }.buttonStyle(.plain)
+            NavigationLink { TestsView() } label: {
+                SymbolTile(title: "Tests", subtitle: "Battery, self-tests and misfires", symbol: "checklist", tint: MacTint.scan)
+            }.buttonStyle(.plain)
+        }
+    }
+}
+
+/// A tile for pages with no drawn picture from the Mac app: a symbol on a pale circle.
+struct SymbolTile: View {
+    let title: String, subtitle: String, symbol: String
+    let tint: Color
+    var body: some View {
+        TileCard(title: title, subtitle: subtitle) {
+            ZStack {
+                Circle().fill(tint.opacity(0.18)).frame(width: 66, height: 66)
+                Image(systemName: symbol).font(.system(size: 28, weight: .semibold)).foregroundStyle(tint)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+}
+
+struct DiagnosticsView: View {
+    @EnvironmentObject var reader: Reader
+    @Binding var selection: Tab
+    @State private var showPicker = false
+    var body: some View {
+        ProPage(title: "Diagnostics", subtitle: "Read codes, watch live data and check for an emissions test.") {
+            if reader.scanned {   // a way back to the results and Clear codes; nothing shows until a scan has run
+                Button { selection = .problems } label: {
+                    RoundCard(radius: 16) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                proText("Last scan results", size: 15, bold: true)
+                                proText(reader.problems.isEmpty ? "No problems found." : "\(reader.problems.count) problem\(reader.problems.count == 1 ? "" : "s") found.", muted: true)
+                            }
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right").foregroundStyle(MacColor.muted).accessibilityHidden(true)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+            Grid(horizontalSpacing: 12, verticalSpacing: 12) {
+                DiagnosticsRows(selection: $selection, showPicker: $showPicker)
+                GridRow {
+                    NavigationLink { UsedCarView() } label: {
+                        SymbolTile(title: "Used car", subtitle: "What to know before you buy", symbol: "car.2.fill", tint: MacTint.semi)
+                    }.buttonStyle(.plain)
+                    NavigationLink { TripView() } label: {
+                        SymbolTile(title: "Trip", subtitle: "Fuel economy and 0-60 timer", symbol: "fuelpump.fill", tint: Color(hex: "#3A9A56"))
+                    }.buttonStyle(.plain)
+                }
+                GridRow {
+                    NavigationLink { VehiclePageView() } label: {
+                        SymbolTile(title: "Vehicle", subtitle: "VIN, battery and safety recalls", symbol: "car.fill", tint: MacTint.vehicle)
+                    }.buttonStyle(.plain)
+                    NavigationLink { HelpView() } label: {
+                        SymbolTile(title: "Help", subtitle: "Steps and the adapter log", symbol: "questionmark", tint: Color(hex: "#5E7488"))
+                    }.buttonStyle(.plain)
+                }
+            }
+        }
+        .sheet(isPresented: $showPicker) { VehiclePickerSheet() }
+    }
+}
+
+struct DataManagerView: View {
+    @EnvironmentObject var reader: Reader
+    var body: some View {
+        ProPage(title: "Data manager", subtitle: "Your saved scans, reports and recordings. They stay on this iPhone unless you share them.") {
+            NavigationLink { HistoryView() } label: {
+                RoundCard(radius: 16) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            proText("History", size: 15, bold: true)
+                            proText("Every scan, saved by vehicle.", muted: true)
+                        }
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right").foregroundStyle(MacColor.muted).accessibilityHidden(true)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+            }
+            .buttonStyle(.plain)
+            RoundCard(radius: 16) {
+                VStack(alignment: .leading, spacing: 8) {
+                    proText("Vehicle report", size: 15, bold: true)
+                    if reader.scanned {
+                        proText("A page you can print or send, with everything from this visit.", muted: true)
+                        ShareLink(item: ExportFile(data: Data(reader.reportHTML().utf8), name: "vehicle-report.html"),
+                                  preview: SharePreview("Vehicle report")) {
+                            Text("Save report")
+                        }
+                        .buttonStyle(PillStyle())
+                    } else {
+                        proText("Run a scan first, then you can save a report here.", muted: true)
+                    }
+                }
+            }
+            RoundCard(radius: 16) {
+                VStack(alignment: .leading, spacing: 8) {
+                    proText("Drive recording", size: 15, bold: true)
+                    if reader.recordingRows.isEmpty || reader.recording {
+                        proText(reader.recording ? "Still recording. Stop it on the Live page first." : "Use Record on the Live page, then you can save it here.", muted: true)
+                    } else {
+                        proText("A spreadsheet of the live readings you recorded.", muted: true)
+                        ShareLink(item: ExportFile(data: Data(reader.recordingCSV().utf8), name: "drive-recording.csv"),
+                                  preview: SharePreview("Drive recording")) {
+                            Text("Save recording")
+                        }
+                        .buttonStyle(PillStyle())
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct BatteryTestView: View {
+    @EnvironmentObject var reader: Reader
+    var body: some View {
+        ProPage(title: "Battery test", subtitle: "Is the battery holding a charge, and is the alternator keeping it charged?") {
+            if !reader.connected {
+                EmptyStateCard(icon: "icon-gauge", title: "Not connected yet", message: "Plug the adapter in, turn the key to ON, then connect to run the test.")
+            }
+            if reader.busy && reader.connected { BusyLine() }
+            if !reader.testMessage.isEmpty { proText(reader.testMessage, muted: true) }
+            BatteryCard()
+        }
+    }
+}
+
+struct UpdateView: View {
+    var body: some View {
+        ProPage(title: "Update", subtitle: "See if there's a newer version of the app.") { UpdatesCard() }
+    }
+}
+
+/// Checks GitHub for a newer version. An iPhone app can't install its own update, so this explains how to get it.
+struct UpdatesCard: View {
+    @Environment(\.openURL) private var openURL
+    @State private var checking = false
+    @State private var message = ""
+    @State private var available: UpdateCheck.Release? = nil
+
+    private func check() {
+        checking = true
+        message = ""
+        available = nil
+        Task {
+            do {
+                let latest = try await UpdateCheck.latest()
+                if UpdateCheck.isNewer(latest.version, than: AppInfo.version) {
+                    available = latest
+                } else {
+                    message = "You have the latest version."
+                }
+            } catch {
+                message = "Couldn't check for updates. An adapter's Wi-Fi network has no internet, so try again on a network that does."
+            }
+            checking = false
+        }
+    }
+
+    var body: some View {
+        RoundCard(padX: 20, padY: 16) {
+            VStack(alignment: .leading, spacing: 10) {
+                proText("Version \(AppInfo.version)", size: 15, bold: true)
+                if checking {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        proText("Checking…", muted: true, size: 12)
+                    }
+                } else {
+                    Button("Check for updates") { check() }.buttonStyle(PillStyle())
+                }
+                if !message.isEmpty { proText(message, muted: true, size: 12) }
+                if let available {
+                    proText("Version \(available.version) is available.", size: 14, bold: true)
+                    if let notes = available.notes, !notes.isEmpty { proText(notes, muted: true, size: 12) }
+                    if let link = available.url, let url = URL(string: link) {
+                        Button("Get update") { openURL(url) }.buttonStyle(PillStyle(kind: .primary))
+                    } else {
+                        proText("To install it, get the newest code and run the app on your iPhone from Xcode again.", muted: true, size: 12)
+                    }
+                }
+            }
+        }
+    }
+}
+
 // MARK: - First launch
 
 struct WelcomeView: View {
     let done: (_ demo: Bool) -> Void
     private let steps = ["Get an OBD-II adapter that uses Wi-Fi or Bluetooth Low Energy.",
                          "Plug it in under the dashboard and turn the key to ON.",
-                         "Tap a check on Home. The app explains what it finds in plain language."]
+                         "Open Diagnostics and tap a check. The app explains what it finds in plain language."]
 
     var body: some View {
         ScrollView {

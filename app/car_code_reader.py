@@ -28,7 +28,8 @@ from tkinter.scrolledtext import ScrolledText
 from obd_core import (CONN_SERIAL, CONN_WIFI, CONN_DEMO, CONN_DEMO_OLD, CONN_DEMO_SEMI, ECU_NAMES, MS, PIDS,
                       EXTENDED, decode_readiness, format_pid, format_value, list_ports, make_from_vin, open_adapter, us_value,
                       year_from_vin)
-from dtc_database import decode_dtc_bytes, describe_dtc, severity, uds_status_text, why_it_matters
+from dtc_database import (clean_code, decode_dtc_bytes, describe_dtc, search_codes, search_words, severity,
+                          uds_status_text, why_it_matters)
 import icons
 import icon_render
 import j1939
@@ -162,7 +163,7 @@ DRIVE_CYCLES = {
 
 # The colors used for the pictures on Home; the other pages and the side menu use the same ones.
 TINT = {"engine": "#E08A00", "safety": "#D9362B", "scan": "#6C4BD1", "gauge": "#0F8B8D", "smog": "#1E8A4A",
-        "vehicle": "#1F6FD1", "semi": "#B4532A", "old": "#7A5A2E", "home": "#E5E5E5" if DARK else "#222222", "help": "#5E7488",
+        "vehicle": "#1F6FD1", "semi": "#B4532A", "old": "#C49A5E" if DARK else "#7A5A2E", "home": "#E5E5E5" if DARK else "#222222", "help": "#5E7488",
         "service": "#B03E6E", "history": "#2C5C9A", "battery": "#3A9A56"}
 PAGE_ICON = {"Home": ("home", "home"), "Problems": ("alert", "engine"), "Live data": ("gauge", "gauge"),
              "Smog check": ("smog", "smog"), "Tests": ("scan", "scan"), "Vehicle": ("vehicle", "vehicle"),
@@ -839,6 +840,9 @@ class App:
         self.main.pack(side="left", fill="both", expand=True)
         self.pages = {
             "Home": self._build_home(),
+            "Diagnostics": self._build_diagnostics(),
+            "Data manager": self._build_data_manager(),
+            "Settings": self._build_settings(),
             "Choose vehicle": self._build_picker(),
             "1995 and older": self._build_obd1(),
             "Problems": self._build_problems(),
@@ -846,6 +850,7 @@ class App:
             "Smog check": self._build_smog(),
             "Tests": self._build_tests(),
             "Service": self._build_service(),
+            "Search": self._build_search(),
             "Used car": self._build_used_car(),
             "Trip": self._build_trip(),
             "Vehicle": self._build_vehicle(),
@@ -865,7 +870,8 @@ class App:
     def show_page(self, name):
         if name == "Home":
             self.refresh_home()
-        self.nav_selected = "Home" if name in ("Choose vehicle", "1995 and older") else name
+        self.nav_selected = "Home" if name in ("Choose vehicle", "1995 and older", "Diagnostics", "Data manager",
+                                              "Settings") else "Service" if name == "Search" else name
         for n in self.nav:
             self._nav_draw(n)
         for n, frame in self.pages.items():
@@ -874,12 +880,12 @@ class App:
             else:
                 frame.pack_forget()
         self.current_page = name
+        if name == "Diagnostics" and hasattr(self, "diag_last"):
+            self.refresh_diag_last()
         if name == "History" and hasattr(self, "history_area"):
             self.refresh_history()
         if name == "Smog check" and hasattr(self, "smog_area"):
             self.refresh_smog()
-        if name == "Service" and hasattr(self, "service_area"):
-            self.refresh_service()
         if name == "Vehicle" and hasattr(self, "recall_btn"):
             make, model, year, vin, _ = self._recall_vehicle()
             if (vin or (make and model and year)) and self._recalls_for != (make, model, year, vin):
@@ -945,32 +951,272 @@ class App:
         self.update_bar = self.update_bar_card.inner
         self.home_vehicle = tk.Frame(page, bg=C["page"])
         self.home_vehicle.pack(fill="x")
+        if LAYOUT == "Organized":
+            self._launcher(page)
+        else:
+            self._diag_tiles(page)
+        return page
+
+    LAUNCHER = (("Diagnostics", "Read codes, live data and tests", "engine", "engine", lambda self: self.show_page("Diagnostics")),
+                ("Service", "Search how to fix things", "wrench", "safety", lambda self: self.show_page("Service")),
+                ("Data manager", "History, reports and recordings", "folder", "old",
+                 lambda self: self.show_page("Data manager")),
+                ("Battery test", "Battery and charging check", "battery", "battery", lambda self: self.show_page("Tests")),
+                ("Settings", "Appearance and layout", "gear", "help", lambda self: self.show_page("Settings")),
+                ("Update", "Check for a newer version", "download", "vehicle", lambda self: self._open_update()))
+
+    def _launcher(self, page):
+        """The first page: the same tiles as the folders inside it, so the whole app looks like one set."""
+        def art(icon, key):
+            return lambda cv, x, y: icons.draw(cv, icon, x, y, 64, TINT[key], F(11, "bold"), halo=True)
+
+        tile_grid(page, [(title, sub, art(icon, key), lambda run=run: run(self))
+                         for title, sub, icon, key, run in self.LAUNCHER], columns=3, width=184, art=92, title_size=14)
+
+    # --- Search: how to fix something, and codes ------------------------------------------------
+    SEARCH_MAX_CODES = 25
+
+    def _search_bars(self, page):
+        box = tk.Frame(page, bg=C["page"])
+        box.pack(fill="x", pady=(0, 16))
+        box.columnconfigure(1, weight=1)
+        self.fix_var, self.code_var = tk.StringVar(), tk.StringVar()
+        rows = (("How to fix", self.fix_var, "Search", self._search_fix), ("Code", self.code_var, "Look up", self._search_code))
+        for i, (label, var, button, run) in enumerate(rows):
+            tk.Label(box, text=label, bg=C["page"], fg=C["ink"], font=F(14, "bold"), anchor="w").grid(
+                row=i, column=0, sticky="w", padx=(0, 12), pady=4)
+            entry = ttk.Entry(box, textvariable=var, font=F(14))
+            entry.grid(row=i, column=1, sticky="we", pady=4)
+            entry.bind("<Return>", lambda e, r=run: r())
+            PillButton(box, button, run).grid(row=i, column=2, padx=(10, 0), pady=4)
+        self.code_hint = tk.Label(box, text="", bg=C["page"], fg=C["muted"], font=F(12), anchor="w", justify="left")
+        self.code_hint.grid(row=2, column=1, columnspan=2, sticky="w")
+
+    def _build_search(self):
+        page = tk.Frame(self.main, bg=C["page"])
+        self.search_back = LinkLabel(page, "Back", self._search_go_back)
+        self.search_back.pack(anchor="w", pady=(0, 6))
+        self.search_title = tk.Label(page, text="", bg=C["page"], fg=C["ink"], font=F(22, "bold"), anchor="w", justify="left")
+        self.search_title.pack(fill="x")
+        wrap_on_resize(self.search_title, 20)
+        self.search_sub = tk.Label(page, text="", bg=C["page"], fg=C["muted"], font=F(13), anchor="w", justify="left")
+        self.search_sub.pack(fill="x", pady=(2, 10))
+        wrap_on_resize(self.search_sub, 20)
+        self.search_area = ScrollArea(page, C["page"])
+        self.search_area.pack(fill="both", expand=True)
+        self.search_from_fix = None
+        return page
+
+    def _search_go_back(self):
+        if self.search_from_fix:
+            query, self.search_from_fix = self.search_from_fix, None
+            self._show_fix_results(query)
+        else:
+            self.show_page("Service")
+
+    def _search_fix(self):
+        text = self.fix_var.get().strip()
+        if not text:
+            return
+        code = clean_code(text)  # a code in the top bar still goes to the code page
+        if code:
+            self.search_from_fix = None
+            self._show_code_result(code)
+        else:
+            self._show_fix_results(text)
+
+    def _search_code(self):
+        text = self.code_var.get().strip()
+        if not text:
+            return
+        code = clean_code(text)
+        if not code:
+            self.code_hint.configure(text="That isn't a code. A code is a letter and 4 numbers or letters, like P0301. "
+                                          "To search by words, use the top bar.")
+            return
+        self.code_hint.configure(text="")
+        self.code_var.set(code)
+        self.search_from_fix = None
+        self._show_code_result(code)
+
+    def _vehicle_words(self):
+        ch = self.chosen or {}
+        return " ".join(str(x) for x in (ch.get("year"), ch.get("make"), ch.get("model")) if x)
+
+    def _web_links(self, parent, base, topic):
+        car = self._vehicle_words()
+
+        def query(extra=""):
+            return urllib.parse.quote(" ".join(x for x in (base, car, extra) if x))
+
+        card = RoundPanel(parent, pad=(22, 16), radius=16)
+        card.pack(fill="x", pady=(0, 12))
+        self._line(card.inner, "On the web", bold=True, size=15, pady=0)
+        self._line(card.inner, f"Opens your browser to search for {topic}{' on a ' + car if car else ''}.", color=C["muted"])
+        row = tk.Frame(card.inner, bg=C["panel"])
+        row.pack(fill="x", pady=(10, 0))
+        PillButton(row, "Search for repair info", lambda: webbrowser.open("https://www.google.com/search?q=" + query()),
+                   kind="primary").pack(side="left")
+        PillButton(row, "Repair videos", lambda: webbrowser.open("https://www.youtube.com/results?search_query=" + query())
+                   ).pack(side="left", padx=(10, 0))
+        PillButton(row, "Diagrams", lambda: webbrowser.open("https://www.google.com/search?tbm=isch&q=" + query("diagram"))
+                   ).pack(side="left", padx=(10, 0))
+
+    def _steps_into(self, parent, steps):
+        for i, step in enumerate(steps, 1):
+            self._line(parent, f"{i}. {step}", pady=(3, 0))
+
+    def _show_code_result(self, code):
+        self.show_page("Search")
+        self.search_area.clear()
+        inner = self.search_area.inner
+        info = describe_dtc(code, self._current_make())
+        self.search_title.configure(text=code)
+        self.search_sub.configure(text=info["description"])
+
+        def card(title):
+            box = RoundPanel(inner, pad=(22, 16), radius=16)
+            box.pack(fill="x", pady=(0, 12))
+            self._line(box.inner, title, bold=True, size=15, pady=0)
+            return box.inner
+
+        if info.get("factory"):
+            self._line(inner, f"{info['factory']} factory meaning. It can differ a little by model and year.",
+                       color=C["muted"], size=12, pady=(0, 10))
+        if code.startswith("P"):
+            self._line(card("Why it matters"), why_it_matters(code, "Stored", "Engine"))
+        if info["causes"]:
+            self._line(card("Common causes"), info["causes"])
+        if info.get("checks"):
+            self._steps_into(card("How to check it"), info["checks"])
+        self._web_links(inner, code, code)
+        self._line(inner, "This is general guidance. Confirm with a test before buying parts.", color=C["muted"], size=12)
+
+    def _show_fix_results(self, query):
+        self.show_page("Search")
+        self.search_area.clear()
+        inner = self.search_area.inner
+        self.search_title.configure(text=f'Results for "{query}"')
+        self.search_sub.configure(text="From the app's own guides and code list, plus the web.")
+        lower = query.lower()  # a full question stays as it was typed
+        self._web_links(inner, query if "how" in lower or "fix" in lower else f"how to fix {query}", query)
+        words = search_words(query)
+        guides = service_guides.search(words)
+        codes = search_codes(query, self._current_make())
+        if guides:
+            self._line(inner, "Repair guides", bold=True, size=16, pady=(4, 8))
+        for g in guides:
+            self._service_card(inner, g)
+        if codes:
+            self._line(inner, "Codes that mention this", bold=True, size=16, pady=(8, 8))
+
+        def open_code(code):
+            self.search_from_fix = query
+            self._show_code_result(code)
+
+        for code, text in codes[:self.SEARCH_MAX_CODES]:
+            row = RoundPanel(inner, pad=(20, 10), radius=14)
+            row.pack(fill="x", pady=(0, 8))
+            label = self._line(row.inner, f"{code}   {text}", pady=0)
+            bind_click(row, lambda c=code: open_code(c), also=(row.inner, label))
+            for w in (row, row.inner, label):
+                w.configure(cursor="hand2")
+        if len(codes) > self.SEARCH_MAX_CODES:
+            self._line(inner, f"Showing the first {self.SEARCH_MAX_CODES} of {len(codes)}. Add a word to narrow it down.",
+                       color=C["muted"], size=12)
+        if not guides and not codes:
+            self._line(inner, "Nothing in the app's own guides or code list matches this. Try the web buttons above, or "
+                              "a simpler word.", color=C["muted"], pady=(4, 0))
+
+    def _open_update(self):
+        self.show_page("Help")
+        self.check_updates()
+
+    def _back_to_checks(self):
+        self.show_page("Diagnostics" if LAYOUT == "Organized" else "Home")
+
+    def _subpage(self, title, subtitle, back="Home"):
+        """A page opened from a Home box: a Back link, then its title."""
+        page = tk.Frame(self.main, bg=C["page"])
+        LinkLabel(page, "Back", lambda: self.show_page(back)).pack(anchor="w", pady=(0, 6))
+        self._page_title(page, title, subtitle)
+        return page
+
+    def _build_diagnostics(self):
+        page = self._subpage("Diagnostics", "Read codes, watch live data and check for an emissions test.")
+        self.diag_last = tk.Frame(page, bg=C["page"])
+        self.diag_last.pack(fill="x")
+        self._diag_tiles(page, more=True)
+        return page
+
+    def refresh_diag_last(self):
+        """After a scan, a way back to its results and Clear codes. Nothing shows until then."""
+        for w in self.diag_last.winfo_children():
+            w.destroy()
+        if not self.scanned:
+            return
+        count = len(self.items)
+        words = "No problems found." if not count else f"{count} problem{'' if count == 1 else 's'} found."
+        card = RoundPanel(self.diag_last, pad=(22, 14), radius=18)
+        card.pack(fill="x", pady=(0, 14))
+        tk.Label(card.inner, text="Last scan results", bg=C["panel"], fg=C["ink"], font=F(16, "bold"),
+                 anchor="w").pack(fill="x")
+        tk.Label(card.inner, text=words, bg=C["panel"], fg=C["muted"], font=F(13), anchor="w").pack(fill="x", pady=(2, 0))
+        PillButton(card.inner, "See results", lambda: self.show_page("Problems")).pack(anchor="w", pady=(10, 0))
+
+    def _build_data_manager(self):
+        page = self._subpage("Data manager", "Your saved scans, reports and recordings. They stay on this computer "
+                                             "unless you share them.")
+
+        def section(title, text, button=None, command=None):
+            card = RoundPanel(page, pad=(22, 16), radius=18)
+            card.pack(fill="x", pady=(0, 12))
+            tk.Label(card.inner, text=title, bg=C["panel"], fg=C["ink"], font=F(16, "bold"), anchor="w").pack(fill="x")
+            t = tk.Label(card.inner, text=text, bg=C["panel"], fg=C["muted"], font=F(13), anchor="w", justify="left")
+            t.pack(fill="x", pady=(2, 0))
+            wrap_on_resize(t, 60)
+            if button:
+                PillButton(card.inner, button, command).pack(anchor="w", pady=(10, 0))
+
+        section("History", "Every scan, saved by vehicle.", "Open history", lambda: self.show_page("History"))
+        section("Vehicle report", "A page you can print or send, with everything from this visit.", "Save report",
+                self._save_report_from_data)
+        section("Drive recording", "Use Record on the Live data page. It asks where to save when you stop.")
+        return page
+
+    def _save_report_from_data(self):
+        if self.scanned:
+            self.save_report()
+        else:
+            messagebox.showinfo(APP_NAME, "Run a scan first, then you can save a report.")
+
+    def _build_settings(self):
+        page = self._subpage("Settings", "How the app looks. Adapter choices are under Connection options on the "
+                                         "Problems page.")
+        self._look_rows(page)
+        return page
+
+    def _diag_tiles(self, parent, more=False):
         s = 64
         tint = TINT
 
         def art(name, key):
             return lambda cv, x, y: icons.draw(cv, name, x, y, s, tint[key], F(int(s * 0.17), "bold"), halo=True)
 
-        def both(cv, x, y):
-            red = tint["safety"]
-            cv.create_oval(x - s * 1.05, y - s * 0.68, x + s * 1.05, y + s * 0.68,
-                           fill=icons.blend(C["panel"], red, 0.13), outline="")
-            icons.draw(cv, "abs", x - s * 0.46, y, s * 0.78, red, F(int(s * 0.13), "bold"))
-            icons.draw(cv, "airbag", x + s * 0.46, y, s * 0.78, red)
-
-        tile_grid(page, [
-            ("Engine codes", "Check-engine and transmission codes", art("engine", "engine"),
-             lambda: self.start_scan("engine")),
-            ("ABS and airbag", "Brake and airbag warning lights", both, lambda: self.start_scan("safety")),
-            ("Full scan", "Everything at once", art("scan", "scan"), lambda: self.start_scan("all")),
-            ("Semi trucks", "Heavy-duty trucks, 9-pin port", art("semi", "semi"), self.start_semi),
+        tile_grid(parent, [
+            ("Full scan", "Engine, ABS and airbag codes", art("scan", "scan"), lambda: self.start_scan("all")),
+            ("Choose vehicle", "Cars, trucks and semi trucks", art("vehicle", "vehicle"), self.open_picker),
             ("Live data", "Engine readings in real time", art("gauge", "gauge"), self.open_live),
             ("Smog check", "Ready for an emissions test?", art("smog", "smog"),
              lambda: self.show_page("Smog check")),
             ("OBD-I", "Blink codes (1995 & older), no adapter", art("blink", "old"), lambda: self.open_obd1()),
-            ("Choose vehicle", "Make, model and year", art("vehicle", "vehicle"), self.open_picker),
-        ], columns=4, width=184, art=92, title_size=14)
-        return page
+        ] + ([
+            ("Tests", "Battery, self-tests and misfires", art("scan", "scan"), lambda: self.show_page("Tests")),
+            ("Used car", "What to know before you buy", art("vehicle", "semi"), lambda: self.show_page("Used car")),
+            ("Trip", "Fuel economy and 0-60 timer", art("gauge", "battery"), lambda: self.show_page("Trip")),
+            ("Vehicle", "VIN, battery and safety recalls", art("vehicle", "vehicle"), lambda: self.show_page("Vehicle")),
+        ] if more else []), columns=4, width=184, art=92, title_size=14)
+
 
     def refresh_home(self):
         box = self.home_vehicle
@@ -1011,12 +1257,10 @@ class App:
     def start_scan(self, kind):
         """Home-screen tiles: connect first if needed, then run that kind of scan."""
         ch = self.chosen
+        if ch and vehicles.is_truck(ch["make"]):
+            self.start_semi()
+            return
         if ch and int(ch["year"]) < 1996:  # OBD-I: no data port standard, use the blink-code guide
-            if kind == "safety":
-                messagebox.showinfo(APP_NAME, "On 1995 and older vehicles, ABS and airbag codes use separate, "
-                                              "maker-specific blink procedures that this app doesn't cover yet.\n\n"
-                                              "Engine codes are covered: use Engine codes or 1995 and older.")
-                return
             group = vehicles.obd1_group(ch["make"])
             if not group:
                 messagebox.showinfo(APP_NAME, f"1995 and older {ch['make']} vehicles use a system this app can't read.")
@@ -1143,7 +1387,7 @@ class App:
             self.o1_group = None
             self._obd1_fill()
         else:
-            self.show_page("Home")
+            self._back_to_checks()
 
     def _obd1_fill(self):
         self.o1_area.clear()
@@ -1262,9 +1506,11 @@ class App:
         if self.pick_step == "year":
             self.pick_step = "model"
         elif self.pick_step == "model":
+            self.pick_step = "trucks" if vehicles.is_truck(self.pick_make) else "make"
+        elif self.pick_step == "trucks":
             self.pick_step = "make"
         else:
-            self.show_page("Home")
+            self._back_to_checks()
             return
         self._pick_reset_search()
         self._pick_fill()
@@ -1279,14 +1525,32 @@ class App:
             self.pick_trail.configure(text="Ford and GM brands get engine, ABS and airbag. Every other make gets "
                                            "engine codes, and ABS and airbag on many newer models.")
             spec = []
+            if not q or q in "semi trucks":
+                spec.append(("Semi trucks", "Freightliner, Peterbilt and more",
+                             lambda cv, x, y: icons.draw(cv, "semi", x, y, 64, C["steel"]), self._pick_trucks))
+            # The truck brands live one level down, but searching from here still finds them.
             for make in sorted(vehicles.MAKES, key=lambda m: (vehicles.family_of(m) not in ("Ford", "GM"), m)):
-                if q and q not in make.lower():
+                if (q and q not in make.lower()) or (vehicles.is_truck(make) and not q):
                     continue
                 letters = vehicles.MAKES[make][0]
 
                 def painter(cv, x, y, mk=make, lt=letters):
                     icons.make_badge(cv, lt, x, y, 64, "#1E1E1E", F(17 if len(lt) < 3 else 14, "bold"))
                 spec.append((make, vehicles.support_text(make), painter, lambda mk=make: self._pick_set_make(mk)))
+            tile_grid(inner, spec, columns=5, width=150, art=70, title_size=14)
+        elif step == "trucks":
+            self.pick_title.configure(text="Choose the truck brand")
+            self.pick_trail.configure(text="Semi trucks need a 9-pin cable and an adapter that can read J1939. Every "
+                                           "brand reads the same way, so the brand just labels your truck.")
+            spec = []
+            for make in vehicles.TRUCKS:
+                if q and q not in make.lower():
+                    continue
+                letters = vehicles.MAKES[make][0]
+
+                def painter(cv, x, y, lt=letters):
+                    icons.make_badge(cv, lt, x, y, 64, "#1E1E1E", F(17 if len(lt) < 3 else 14, "bold"))
+                spec.append((make, "", painter, lambda mk=make: self._pick_set_make(mk)))
             tile_grid(inner, spec, columns=5, width=150, art=70, title_size=14)
         elif step == "model":
             make = self.pick_make
@@ -1296,11 +1560,13 @@ class App:
             for model, kind in vehicles.models(make):
                 if q and q not in model.lower():
                     continue
-                body = {"t": "truck", "s": "suv", "c": "car", "v": "van"}[kind]
+                body = {"t": "truck", "s": "suv", "c": "car", "v": "van", "k": "semi"}[kind]
                 spec.append((model, "", lambda cv, x, y, b=body: icons.draw(cv, b, x, y, 62, C["steel"]),
                              lambda m=model, k=kind: self._pick_set_model(m, k)))
+            truck = vehicles.is_truck(make)
             spec.append(("Other model", "Not in the list", lambda cv, x, y: icons.draw(
-                cv, "car", x, y, 62, C["off"]), lambda: self._pick_set_model("", "c")))
+                cv, "semi" if truck else "car", x, y, 62, C["off"]),
+                lambda: self._pick_set_model("", "k" if truck else "c")))
             tile_grid(inner, spec, columns=5, width=150, art=56, title_size=14)
         else:
             self.pick_title.configure(text="Choose the year")
@@ -1313,7 +1579,9 @@ class App:
                                min_width=F(15, "bold").measure("2000") + 52)
                 b.grid(row=i // 7, column=i % 7, padx=(0, 10), pady=(0, 10), sticky="w")
             older = vehicles.obd1_group(self.pick_make) and ys and min(ys) < 1996
-            note = ("1995 and older: the app walks you through reading the blink codes, no adapter needed."
+            note = ("Trucks older than about 2000 mostly have a round 6-pin port, which this app can't read."
+                    if vehicles.is_truck(self.pick_make) else
+                    "1995 and older: the app walks you through reading the blink codes, no adapter needed."
                     if older else "Only the years this model was sold, and that this app can read, are shown.")
             tk.Label(inner, text=note, bg=C["page"], fg=C["muted"], font=F(12), anchor="w").pack(
                 fill="x", pady=(8, 0))
@@ -1322,6 +1590,11 @@ class App:
         self._pick_quiet = True
         self.pick_search.set("")
         self._pick_quiet = False
+
+    def _pick_trucks(self):
+        self.pick_step = "trucks"
+        self._pick_reset_search()
+        self._pick_fill()
 
     def _pick_set_make(self, make):
         self.pick_make, self.pick_step = make, "model"
@@ -1337,6 +1610,7 @@ class App:
         make = self.pick_make
         self.chosen = {"make": make, "model": self.pick_model, "year": year, "kind": self.pick_kind,
                        "family": vehicles.family_of(make)}
+        self.heavy = vehicles.is_truck(make)  # so a plain Connect uses the right network too
         self._apply_chosen()
         self.show_page("Home")
 
@@ -2904,29 +3178,9 @@ class App:
     # --- Service page: relearns, resets and bleeding ------------------------------------------------
     def _build_service(self):
         page = tk.Frame(self.main, bg=C["page"])
-        self._page_title(page, "Service", "Relearns, resets and brake bleeding you can do by hand. Click one to see "
-                                          "the steps.", icon=PAGE_ICON["Service"])
-        self.service_for = tk.Label(page, text="", bg=C["page"], fg=C["muted"], font=F(13), anchor="w")
-        self.service_for.pack(fill="x", pady=(0, 10))
-        self.service_area = ScrollArea(page, C["page"])
-        self.service_area.pack(fill="both", expand=True)
-        self._service_shown = None
+        self._page_title(page, "Service", "Search how to fix something, or look up a code.", icon=PAGE_ICON["Service"])
+        self._search_bars(page)
         return page
-
-    def refresh_service(self):
-        make = self._current_make()
-        fam = maker_codes.family(make)
-        if self._service_shown == fam and self.service_area.inner.winfo_children():
-            return
-        self._service_shown = fam
-        ch = self.chosen or {}
-        name = " ".join(str(x) for x in (ch.get("year"), ch.get("make"), ch.get("model")) if x) or make
-        self.service_for.configure(
-            text=f"Showing guides for {name}, plus ones for most vehicles." if fam else
-            "Showing guides for all vehicles. Pick your vehicle on Home to see only the ones for it.")
-        self.service_area.clear()
-        for g in service_guides.for_family(fam):
-            self._service_card(self.service_area.inner, g)
 
     def _service_card(self, parent, g):
         card = RoundPanel(parent, pad=(20, 14), radius=16)
@@ -2983,7 +3237,7 @@ class App:
         steps = [
             "Plug the adapter into the OBD port under the dashboard, near the steering column.",
             "Turn the key to ON. The engine can be off or running.",
-            "On Home, click Engine codes, ABS and airbag, or Full scan. The app finds the adapter by itself.",
+            "Open Diagnostics and click Full scan. The app finds the adapter by itself. For a semi truck, pick it in Choose vehicle first.",
             "Click any problem to see what it means, how urgent it is, and what usually fixes it.",
             "To clear codes, turn the engine off and leave the key on first.",
         ]
@@ -3007,18 +3261,7 @@ class App:
             "maintains this app."))
         tips.pack(fill="x", pady=(16, 10))
         wrap_on_resize(tips, 20)
-        look = tk.Frame(page, bg=C["page"])
-        look.pack(fill="x", pady=(0, 12))
-        tk.Label(look, text="Appearance", bg=C["page"], fg=C["ink"], font=F(13, "bold")).pack(side="left", padx=(0, 12))
-        for choice in APPEARANCES:
-            PillButton(look, choice, lambda c=choice: self._set_appearance(c),
-                       kind="primary" if choice == APPEARANCE else "secondary").pack(side="left", padx=(0, 8))
-        arrange = tk.Frame(page, bg=C["page"])
-        arrange.pack(fill="x", pady=(0, 12))
-        tk.Label(arrange, text="Layout", bg=C["page"], fg=C["ink"], font=F(13, "bold")).pack(side="left", padx=(0, 12))
-        for choice in LAYOUTS:
-            PillButton(arrange, choice, lambda c=choice: self._set_layout(c),
-                       kind="primary" if choice == LAYOUT else "secondary").pack(side="left", padx=(0, 8))
+        self._look_rows(page)
         ver = tk.Frame(page, bg=C["page"])
         ver.pack(fill="x", pady=(0, 12))
         tk.Label(ver, text=f"Version {VERSION}", bg=C["page"], fg=C["ink"], font=F(13, "bold")).pack(side="left")
@@ -3036,6 +3279,20 @@ class App:
                                     highlightbackground=C["line"], highlightthickness=1, bg=C["panel"],
                                     fg=C["ink"], insertbackground=C["ink"])
         return page
+
+    def _look_rows(self, page):
+        look = tk.Frame(page, bg=C["page"])
+        look.pack(fill="x", pady=(0, 12))
+        tk.Label(look, text="Appearance", bg=C["page"], fg=C["ink"], font=F(13, "bold")).pack(side="left", padx=(0, 12))
+        for choice in APPEARANCES:
+            PillButton(look, choice, lambda c=choice: self._set_appearance(c),
+                       kind="primary" if choice == APPEARANCE else "secondary").pack(side="left", padx=(0, 8))
+        arrange = tk.Frame(page, bg=C["page"])
+        arrange.pack(fill="x", pady=(0, 12))
+        tk.Label(arrange, text="Layout", bg=C["page"], fg=C["ink"], font=F(13, "bold")).pack(side="left", padx=(0, 12))
+        for choice in LAYOUTS:
+            PillButton(arrange, choice, lambda c=choice: self._set_layout(c),
+                       kind="primary" if choice == LAYOUT else "secondary").pack(side="left", padx=(0, 8))
 
     def _set_layout(self, choice):
         if choice != LAYOUT:

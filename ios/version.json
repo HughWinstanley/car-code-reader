@@ -1,4 +1,4 @@
 {
-  "version": "2.16",
-  "notes": "Welcome screen, dark mode icons, truck, SUV and van icons, clearer error messages, and support for larger text and VoiceOver."
+  "version": "2.17",
+  "notes": "A cleaner Home with big boxes and no tabs, Diagnostics with one Full scan, semi trucks in Choose vehicle by brand, model and year, and a Service page that searches how to fix things and looks up codes."
 }

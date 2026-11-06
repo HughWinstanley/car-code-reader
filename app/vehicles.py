@@ -1,7 +1,7 @@
 """
 Makes and models for the vehicle picker (US market).
 
-Each model is "Name:type:years" where type is t (pickup), s (SUV), c (car) or v (van), and years are
+Each model is "Name:type:years" where type is t (pickup), s (SUV), c (car), v (van) or k (semi truck), and years are
 US model years: "1996-2004", an open range "1999-" (still made), or several ranges "1983-2001|2014-2023".
 The picker only offers years inside these ranges, and never earlier than the oldest year the app can
 read for that make: 1981 for makes with a blink-code guide (OBD-I), otherwise 1996 (OBD-II).
@@ -246,6 +246,40 @@ OBD1_GROUP = {
     "Toyota": "Toyota", "Lexus": "Toyota", "Honda": "Honda", "Acura": "Honda",
 }
 
+# Semi trucks (Class 8 and big Class 6-7). Kind k draws the semi picture. They all read over J1939, so the brand
+# only labels the truck. Years start at 2000 because older trucks mostly have the round 6-pin J1708 port instead.
+TRUCK_FAMILY = "Semi"
+TRUCK_FIRST_YEAR = 2000
+TRUCKS = {
+    "Freightliner": ("FL", TRUCK_FAMILY, _m(
+        "Cascadia:k:2007-, Columbia:k:2000-2013, Century Class:k:2000-2011, Classic:k:2000-2011, Coronado:k:2001-2017, "
+        "M2 106:k:2002-, M2 112:k:2004-2016, 108SD:k:2011-, 114SD:k:2011-, 122SD:k:2011-")),
+    "Peterbilt": ("PB", TRUCK_FAMILY, _m(
+        "579:k:2012-, 589:k:2024-, 567:k:2013-, 389:k:2007-, 379:k:2000-2007, 387:k:2000-2010, 386:k:2005-2015, "
+        "384:k:2008-2015, 367:k:2007-, 365:k:2007-, 357:k:2000-2007, 348:k:2006-2017, 337:k:2005-2017")),
+    "Kenworth": ("KW", TRUCK_FAMILY, _m(
+        "T680:k:2013-, T880:k:2014-, W900:k:2000-, W990:k:2018-, T800:k:2000-, T660:k:2008-2017, T600:k:2000-2007, "
+        "T700:k:2010-2015, T2000:k:2000-2010, T370:k:2010-2021, T300:k:2000-2010")),
+    "Mack": ("MK", TRUCK_FAMILY, _m(
+        "Anthem:k:2018-, Pinnacle:k:2006-, Granite:k:2002-, Vision:k:2000-2007, CH:k:2000-2006, CL:k:2000-2006, "
+        "RD:k:2000-2013, LR:k:2015-, MD:k:2020-, TerraPro:k:2007-")),
+    "International": ("INT", TRUCK_FAMILY, _m(
+        "LT:k:2017-, RH:k:2018-, HX:k:2016-, MV:k:2018-, ProStar:k:2008-2018, LoneStar:k:2009-2019, TranStar:k:2009-2019, "
+        "WorkStar:k:2008-2017, DuraStar:k:2002-2018, PayStar:k:2004-2017, 9900i:k:2000-2016, 9400i:k:2000-2007, "
+        "9200i:k:2000-2007, 8600:k:2002-2014")),
+    "Volvo Trucks": ("VT", TRUCK_FAMILY, _m(
+        "VNL:k:2000-, VNR:k:2018-, VNX:k:2003-, VHD:k:2000-, VAH:k:2008-2019, VT:k:2003-2009")),
+    "Western Star": ("WS", TRUCK_FAMILY, _m(
+        "49X:k:2021-, 57X:k:2023-, 47X:k:2021-, 4900:k:2000-2024, 5700XE:k:2015-2023, 4700:k:2012-2021, 6900:k:2000-")),
+    "Sterling": ("SL", TRUCK_FAMILY, _m(
+        "A-Line:k:2000-2009, L-Line:k:2000-2009, Acterra:k:2001-2009, Bullet:k:2008-2009")),
+}
+MAKES.update(TRUCKS)
+
+
+def is_truck(make):
+    return make in TRUCKS
+
 FULL_SUPPORT_FAMILIES = ("Ford", "GM")
 
 
@@ -254,6 +288,8 @@ def obd1_group(make):
 
 
 def earliest_year(make):
+    if is_truck(make):
+        return TRUCK_FIRST_YEAR
     return OBD1_FIRST_YEAR if obd1_group(make) else FIRST_YEAR
 
 
@@ -282,6 +318,8 @@ def models(make):
 
 
 def support_text(make, year=None):
+    if is_truck(make):
+        return "Truck codes over J1939, 9-pin port"
     if year is not None and int(year) < 1996:
         return "Engine codes by blink-code guide" if obd1_group(make) else "Not readable (1995 and older)"
     if MAKES[make][1] in FULL_SUPPORT_FAMILIES:

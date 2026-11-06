@@ -12,7 +12,8 @@ enum VehicleBadges {
         "Genesis": "GN", "Kia": "KIA", "Mazda": "MZ", "Subaru": "SU", "Mitsubishi": "MI", "Suzuki": "SZ",
         "Isuzu": "IS", "Volkswagen": "VW", "Audi": "AU", "BMW": "BMW", "Mini": "MN", "Mercedes-Benz": "MB",
         "Volvo": "VO", "Saab": "SA", "Porsche": "PR", "Jaguar": "JA", "Land Rover": "LR", "Fiat": "FI",
-        "GM": "GM",
+        "GM": "GM", "Freightliner": "FL", "Peterbilt": "PB", "Kenworth": "KW", "Mack": "MK", "International": "INT",
+        "Volvo Trucks": "VT", "Western Star": "WS", "Sterling": "SL",
     ]
     static func mono(_ make: String) -> String {
         if let m = info[make] { return m }
@@ -76,17 +77,19 @@ struct MakeBadge: View {
 struct VehiclePickerSheet: View {
     @EnvironmentObject var reader: Reader
     @Environment(\.dismiss) private var dismiss
+    @State private var trucks = false      // inside the Semi trucks folder
     @State private var make: String? = nil
     @State private var model: VModel? = nil
     @State private var otherModel = false
     @State private var search = ""
 
     private var title: String {
-        if make == nil { return "Choose the make" }
+        if make == nil { return trucks ? "Choose the truck brand" : "Choose the make" }
         if model == nil && !otherModel { return "Choose the \(make!) model" }
         return "Choose the year"
     }
     private var trail: String {
+        if make == nil && trucks { return "Semi trucks need a 9-pin cable and an adapter that can read J1939. Every brand reads the same way, so the brand just labels your truck." }
         if make == nil { return "Ford and GM brands get engine, ABS and airbag. Every other make gets engine codes, and ABS and airbag on many newer models." }
         return "\(make!) \(model?.name ?? "")".trimmingCharacters(in: .whitespaces)
     }
@@ -94,9 +97,17 @@ struct VehiclePickerSheet: View {
         let q = search.trimmingCharacters(in: .whitespaces).lowercased()
         return q.isEmpty || text.lowercased().contains(q)
     }
+    private var isTruck: Bool { TruckData.models[make ?? ""] != nil }
+    private var modelList: [VModel] { VehicleData.models[make ?? ""] ?? TruckData.models[make ?? ""] ?? [] }
+    /// The first screen: the Semi trucks folder, then the car makes. Searching finds truck brands from here too.
+    private var firstScreen: [String] {
+        let searching = !search.trimmingCharacters(in: .whitespaces).isEmpty
+        return (matches(semiFolder) ? [semiFolder] : []) + (VehicleData.makes + (searching ? TruckData.brands : [])).filter(matches)
+    }
+    private let semiFolder = "Semi trucks"
     private var years: [Int] {
         if let model { return Array((model.minYear...model.maxYear).reversed()) }
-        let all = VehicleData.models[make ?? ""] ?? []
+        let all = modelList
         guard let low = all.map(\.minYear).min(), let high = all.map(\.maxYear).max() else { return [] }
         return Array((low...high).reversed())
     }
@@ -115,13 +126,15 @@ struct VehiclePickerSheet: View {
 
     private func goBack() {
         search = ""
-        if model != nil || otherModel { model = nil; otherModel = false } else { make = nil }
+        if model != nil || otherModel { model = nil; otherModel = false }
+        else if make != nil { make = nil }
+        else { trucks = false }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                if make != nil { LinkLabel("Back") { goBack() } }
+                if make != nil || trucks { LinkLabel("Back") { goBack() } }
                 Spacer()
                 LinkLabel("Cancel") { dismiss() }
             }
@@ -138,24 +151,44 @@ struct VehiclePickerSheet: View {
             .padding(.top, 10).padding(.bottom, 12)
 
             ScrollView {
-                if make == nil {
-                    TileGrid(items: VehicleData.makes.filter(matches), columns: 3) { m in
+                if make == nil && trucks {
+                    TileGrid(items: TruckData.brands.filter(matches), columns: 3) { m in
                         Button { make = m; search = "" } label: {
                             TileCard(title: m) { MakeBadge(make: m, size: 62) }
                         }
                         .buttonStyle(.plain)
                     }
+                } else if make == nil {
+                    TileGrid(items: firstScreen, columns: 3) { m in
+                        Button {
+                            search = ""
+                            if m == semiFolder { trucks = true } else { make = m }
+                        } label: {
+                            TileCard(title: m) {
+                                if m == semiFolder {
+                                    Image("icon-semi").resizable().scaledToFit().frame(height: 62).accessibilityHidden(true)
+                                } else {
+                                    MakeBadge(make: m, size: 62)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
                 } else if model == nil && !otherModel {
-                    let list = (VehicleData.models[make!] ?? []).filter { matches($0.name) }
+                    let list = modelList.filter { matches($0.name) }
                     TileGrid(items: list.map(\.name) + ["Other model"]) { name in
                         Button {
                             search = ""
                             if let m = list.first(where: { $0.name == name }) { model = m } else { otherModel = true }
                         } label: {
                             TileCard(title: name, subtitle: name == "Other model" ? "Not in the list" : "") {
-                                Image(systemName: modelSymbol(name)).font(.system(size: 34))
-                                    .foregroundStyle(name == "Other model" ? MacColor.off : MacColor.ink)
-                                    .accessibilityHidden(true)
+                                if isTruck {
+                                    Image("icon-semi").resizable().scaledToFit().frame(height: 46).accessibilityHidden(true)
+                                } else {
+                                    Image(systemName: modelSymbol(name)).font(.system(size: 34))
+                                        .foregroundStyle(name == "Other model" ? MacColor.off : MacColor.ink)
+                                        .accessibilityHidden(true)
+                                }
                             }
                         }
                         .buttonStyle(.plain)
@@ -174,8 +207,10 @@ struct VehiclePickerSheet: View {
                             }
                         }
                         .padding(1)   // keeps the pill edges clear of the scroll view's clipping
-                        Text(years.contains { $0 < 1996 }
-                             ? "1995 and older: use OBD-I on the Home page to read the blink codes, no adapter needed."
+                        Text(isTruck
+                             ? "Trucks older than about 2000 mostly have a round 6-pin port, which this app can't read."
+                             : years.contains { $0 < 1996 }
+                             ? "1995 and older: use OBD-I in Diagnostics to read the blink codes, no adapter needed."
                              : "Only the years this model was sold, and that this app can read, are shown.")
                             .scaledFont(12).foregroundStyle(MacColor.muted)
                             .fixedSize(horizontal: false, vertical: true)
@@ -193,6 +228,7 @@ struct VehiclePickerSheet: View {
 extension VehicleData {
     /// What the app can read on a chosen vehicle (the Mac app's support_text).
     static func supportText(make: String, year: Int?) -> String {
+        if TruckData.models[make] != nil { return "Truck codes over J1939, 9-pin port" }
         if let year, year < 1996 { return "Engine codes by blink-code guide" }
         let fam = family[make] ?? ""
         return fam == "Ford" || fam == "GM" ? "Engine, ABS and airbag" : "Engine codes, some ABS and airbag"

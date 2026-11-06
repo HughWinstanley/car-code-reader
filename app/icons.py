@@ -288,6 +288,43 @@ def _history(cv, cx, cy, s, c):
                    joinstyle="round")
 
 
+def _battery(cv, cx, cy, s, c):
+    u = s / 10
+    w = max(2, s / 13)
+    rounded_rect(cv, cx - 4.4 * u, cy - 2.6 * u, cx + 4.4 * u, cy + 3.4 * u, 0.9 * u, fill=c, outline="")
+    cv.create_rectangle(cx - 3.2 * u, cy - 3.6 * u, cx - 1.6 * u, cy - 2.6 * u, fill=c, outline="")
+    cv.create_rectangle(cx + 1.6 * u, cy - 3.6 * u, cx + 3.2 * u, cy - 2.6 * u, fill=c, outline="")
+    bg = _bg(cv)
+    cv.create_line(cx - 3.1 * u, cy + 0.4 * u, cx - 1.1 * u, cy + 0.4 * u, fill=bg, width=w)
+    cv.create_line(cx + 1.1 * u, cy + 0.4 * u, cx + 3.1 * u, cy + 0.4 * u, fill=bg, width=w)
+    cv.create_line(cx + 2.1 * u, cy - 0.6 * u, cx + 2.1 * u, cy + 1.4 * u, fill=bg, width=w)
+
+
+def _gear(cv, cx, cy, s, c):
+    u = s / 10
+    for k in range(8):
+        a = math.pi * k / 4
+        cv.create_line(cx + 2.6 * u * math.cos(a), cy + 2.6 * u * math.sin(a), cx + 4.4 * u * math.cos(a),
+                       cy + 4.4 * u * math.sin(a), fill=c, width=max(3, s / 6))
+    cv.create_oval(cx - 3.3 * u, cy - 3.3 * u, cx + 3.3 * u, cy + 3.3 * u, fill=c, outline="")
+    cv.create_oval(cx - 1.4 * u, cy - 1.4 * u, cx + 1.4 * u, cy + 1.4 * u, fill=_bg(cv), outline="")
+
+
+def _folder(cv, cx, cy, s, c):
+    u = s / 10
+    cv.create_polygon(cx - 4.4 * u, cy - 3.2 * u, cx - 1.2 * u, cy - 3.2 * u, cx + 0.2 * u, cy - 1.8 * u,
+                      cx + 4.4 * u, cy - 1.8 * u, cx + 4.4 * u, cy + 3.4 * u, cx - 4.4 * u, cy + 3.4 * u, fill=c, outline="")
+    cv.create_line(cx - 4.4 * u, cy - 0.7 * u, cx + 4.4 * u, cy - 0.7 * u, fill=_bg(cv), width=max(1, s / 22))
+
+
+def _download(cv, cx, cy, s, c):
+    u = s / 10
+    w = max(2, s / 9)
+    cv.create_line(cx, cy - 4.2 * u, cx, cy + 0.6 * u, fill=c, width=w)
+    cv.create_polygon(cx - 3 * u, cy - 0.8 * u, cx + 3 * u, cy - 0.8 * u, cx, cy + 2.8 * u, fill=c, outline="")
+    cv.create_line(cx - 4.2 * u, cy + 4.1 * u, cx + 4.2 * u, cy + 4.1 * u, fill=c, width=w)
+
+
 def draw(cv, name, cx, cy, size, color, small_font=None, halo=False):
     if halo:  # a soft disc behind the icon
         r = size * 0.72
@@ -318,6 +355,14 @@ def draw(cv, name, cx, cy, size, color, small_font=None, halo=False):
         _wrench(cv, cx, cy, size, color)
     elif name == "help":
         _help(cv, cx, cy, size, color, small_font)
+    elif name == "battery":
+        _battery(cv, cx, cy, size, color)
+    elif name == "gear":
+        _gear(cv, cx, cy, size, color)
+    elif name == "folder":
+        _folder(cv, cx, cy, size, color)
+    elif name == "download":
+        _download(cv, cx, cy, size, color)
     elif name in ("truck", "suv", "car", "van", "vehicle"):
         _body(cv, cx, cy, size, color, "truck" if name == "vehicle" else name)
 

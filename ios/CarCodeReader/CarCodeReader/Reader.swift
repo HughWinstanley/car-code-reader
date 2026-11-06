@@ -47,6 +47,8 @@ final class Reader: ObservableObject {
     @Published var protocolName = ""
     @Published var semiFaults: [J1939Fault] = []
     @Published var semiStatus = ""
+    @Published var truckMode = false       // connected for J1939, so the car checks can't run on this connection
+    var chosenIsTruck: Bool { TruckData.models[chosenMake] != nil }
 
     // Connection choice
     @Published var useBluetooth = UserDefaults.standard.bool(forKey: "useBluetooth") {
@@ -111,13 +113,7 @@ final class Reader: ObservableObject {
         busy = true
         errorMessage = nil
         status = useBluetooth ? "Connecting to \(bleAdapterName)…" : "Connecting to \(host):\(port)…"
-        let raw: OBDLink = useBluetooth ? BLELink(adapterID: bleAdapterID) : WifiLink(host: host, port: UInt16(port) ?? 35000)
-        let newLink = LoggingLink(raw) { [weak self] line in
-            Task { @MainActor in
-                self?.adapterLog.append(line)
-                if (self?.adapterLog.count ?? 0) > 2000 { self?.adapterLog.removeFirst(500) }
-            }
-        }
+        let newLink = makeLink()
         Task {
             do {
                 try await newLink.connect()
@@ -133,18 +129,65 @@ final class Reader: ObservableObject {
                 await scanInternal(e)
             } catch {
                 status = "Not connected"
-                errorMessage = Reader.plainWords(error, or: useBluetooth
-                    ? "Couldn't reach your Bluetooth adapter. Make sure it's plugged in with the key ON."
-                    : "Couldn't reach the adapter at \(host). Join its Wi-Fi network in the iPhone's Settings and check the key is ON.")
+                errorMessage = Reader.plainWords(error, or: cantReachAdapter)
                 newLink.close()
             }
             busy = false
         }
     }
 
+    private func makeLink() -> LoggingLink {
+        let raw: OBDLink = useBluetooth ? BLELink(adapterID: bleAdapterID) : WifiLink(host: host, port: UInt16(port) ?? 35000)
+        return LoggingLink(raw) { [weak self] line in
+            Task { @MainActor in
+                self?.adapterLog.append(line)
+                if (self?.adapterLog.count ?? 0) > 2000 { self?.adapterLog.removeFirst(500) }
+            }
+        }
+    }
+
+    private var cantReachAdapter: String {
+        useBluetooth
+            ? "Couldn't reach your Bluetooth adapter. Make sure it's plugged in with the key ON."
+            : "Couldn't reach the adapter at \(host). Join its Wi-Fi network in the iPhone's Settings and check the key is ON."
+    }
+
+    /// Full scan with a semi truck chosen: connect for J1939 if needed, then read its fault codes.
+    /// The normal connect looks for a car's OBD-II answer, which a truck's 9-pin port doesn't give.
+    func readTruck() {
+        guard !busy else { return }
+        if isDemo || (connected && truckMode) { readSemi(); return }
+        if connected { disconnect() }
+        busy = true
+        errorMessage = nil
+        semiFaults = []
+        semiStatus = "Connecting to the adapter…"
+        status = semiStatus
+        let newLink = makeLink()
+        Task {
+            do {
+                try await newLink.connect()
+                _ = try? await newLink.command("ATZ", timeout: 4)
+                for c in ["ATE0", "ATL0", "ATS0", "ATH0", "ATAT1"] { _ = try await newLink.command(c) }
+                link = newLink
+                connected = true; truckMode = true
+                protocolName = "SAE J1939"
+                status = "Connected to the truck."
+                busy = false
+                readSemi()
+            } catch {
+                status = "Not connected"
+                semiStatus = Reader.plainWords(error, or: cantReachAdapter)
+                newLink.close()
+                busy = false
+            }
+        }
+    }
+
     func disconnect() {
         stopLive()
         link?.close(); link = nil; elm = nil
+        truckMode = false; semiFaults = []; semiStatus = ""
         connected = false; scanned = false; problems = []; live = []
         monitors = []; vin = ""; battery = ""; status = "Not connected"
         lastScanAt = nil; milOn = nil; moduleNames = []; scannedModules = []; canScanModules = false
@@ -153,6 +196,7 @@ final class Reader: ObservableObject {
 
     func scan(deep: Bool = false) {
         if isDemo { applyDemoScan(); return }
+        if truckMode { status = "Connected to a semi truck. Use Full scan in Diagnostics to read it."; return }
         guard let e = elm, !busy else { return }
         busy = true; status = "Scanning…"; errorMessage = nil
         let live = pauseLive()
@@ -446,7 +490,7 @@ final class Reader: ObservableObject {
 
     func readSemi() {
         if isDemo { semiFaults = J1939.example; semiStatus = "Demo: 1 active fault shown."; return }
-        guard let link = link else { semiStatus = "Connect on the Problems tab first."; return }
+        guard let link = link else { semiStatus = "Connect to the truck first: tap Connect above."; return }
         guard !busy else { return }
         busy = true; semiStatus = "Listening to the truck's J1939 network…"; semiFaults = []
         let live = pauseLive()

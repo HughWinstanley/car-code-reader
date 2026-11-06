@@ -21,48 +21,13 @@ extension View {
         modifier(ScaledFont(size, weight))
     }
 }
-enum Tab: CaseIterable {
-    case home, problems, live, smog, tests, service, usedCar, trip, vehicle, history, help, settings
+enum Tab { case home, problems, live, smog, settings }
 
-    var title: String {
-        switch self {
-        case .home: return "Home"
-        case .problems: return "Problems"
-        case .live: return "Live"
-        case .smog: return "Smog"
-        case .tests: return "Tests"
-        case .service: return "Service"
-        case .usedCar: return "Used car"
-        case .trip: return "Trip"
-        case .vehicle: return "Vehicle"
-        case .history: return "History"
-        case .help: return "Help"
-        case .settings: return "Settings"
-        }
-    }
-    var symbol: String {
-        switch self {
-        case .home: return "house"
-        case .problems: return "exclamationmark.triangle"
-        case .live: return "gauge"
-        case .smog: return "smoke"
-        case .tests: return "checklist"
-        case .service: return "wrench.and.screwdriver"
-        case .usedCar: return "car.2"
-        case .trip: return "fuelpump"
-        case .vehicle: return "car"
-        case .history: return "clock.arrow.circlepath"
-        case .help: return "questionmark.circle"
-        case .settings: return "gearshape"
-        }
-    }
-}
-
-/// The Settings choice: all the pages as tabs, or the original five tabs with the rest as Home tiles.
+/// The Settings choice: the Home boxes with no tab bar, or the original five tabs with every page as a Home tile.
 enum AppLayout: String, CaseIterable, Identifiable {
     case tabs, original
     var id: String { rawValue }
-    var title: String { self == .tabs ? "More tabs" : "Original" }
+    var title: String { self == .tabs ? "Home boxes" : "Original" }
 }
 
 extension Color {
@@ -452,13 +417,14 @@ struct ContentView: View {
     @EnvironmentObject var reader: Reader
     @State private var selection: Tab = .home
     @State private var visited: Set<Tab> = [.home]
+    @State private var trail: [Tab] = []
     @AppStorage("appearance") private var appearance: Appearance = .automatic
     @AppStorage("layout") private var layout: AppLayout = .tabs
     @AppStorage("welcomeDone") private var welcomeDone = false
 
     var body: some View {
         Group {
-            if layout == .original { originalTabs } else { scrollingTabs }
+            if layout == .original { originalTabs } else { homeBoxes }
         }
         .preferredColorScheme(appearance.scheme)
         .dynamicTypeSize(...DynamicTypeSize.accessibility2)   // past this the tiles stop being readable
@@ -473,19 +439,21 @@ struct ContentView: View {
         .onChange(of: selection) { visited.insert($0) }
     }
 
+    /// Moves to a page and remembers where you came from, for the Back button.
+    private var navigate: Binding<Tab> {
+        Binding(get: { selection }, set: { tab in
+            guard tab != selection else { return }
+            trail.append(selection)
+            selection = tab
+        })
+    }
+
     @ViewBuilder private func page(_ tab: Tab) -> some View {
         switch tab {
-        case .home:     HomeTab(selection: $selection)
-        case .problems: ProblemsTab(selection: $selection)
+        case .home:     HomeTab(selection: navigate)
+        case .problems: ProblemsTab(selection: navigate)
         case .live:     LiveTab()
         case .smog:     SmogTab()
-        case .tests:    MacPage { TestsView() }
-        case .service:  MacPage { ServiceView() }
-        case .usedCar:  MacPage { UsedCarView() }
-        case .trip:     MacPage { TripView() }
-        case .vehicle:  MacPage { VehiclePageView() }
-        case .history:  MacPage { HistoryView() }
-        case .help:     MacPage { HelpView() }
         case .settings: SettingsTab()
         }
     }
@@ -500,42 +468,30 @@ struct ContentView: View {
         }
     }
 
-    /// Every page as a tab, in a bar you can swipe. Pages stay alive so each keeps its place.
-    private var scrollingTabs: some View {
+    /// No tab bar: everything opens from Home. Pages stay alive so each keeps its place.
+    private var homeBoxes: some View {
         VStack(spacing: 0) {
+            if selection != .home {
+                HStack {
+                    Button { selection = trail.popLast() ?? .home } label: {
+                        Label("Back", systemImage: "chevron.left").scaledFont(16, weight: .semibold)
+                            .foregroundStyle(MacColor.ink)
+                            .padding(.vertical, 8).padding(.horizontal, 16)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    Spacer()
+                }
+                .background(MacColor.page)
+            }
             ZStack {
-                ForEach(Tab.allCases.filter { visited.contains($0) }, id: \.self) { tab in
+                ForEach([Tab.home, .problems, .live, .smog, .settings].filter { visited.contains($0) }, id: \.self) { tab in
                     page(tab)
                         .opacity(selection == tab ? 1 : 0)
                         .allowsHitTesting(selection == tab)
                         .accessibilityHidden(selection != tab)
                 }
             }
-            Rectangle().fill(MacColor.line).frame(height: 1)
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 0) {
-                        ForEach(Tab.allCases, id: \.self) { tab in
-                            Button { selection = tab } label: {
-                                VStack(spacing: 3) {
-                                    Image(systemName: tab.symbol).font(.system(size: 20)).frame(height: 24)
-                                    Text(tab.title).font(.system(size: 11, weight: selection == tab ? .bold : .regular)).lineLimit(1)
-                                }
-                                .foregroundStyle(selection == tab ? Color.accentColor : MacColor.muted)
-                                .frame(width: 72).padding(.vertical, 7)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(tab.title)
-                            .accessibilityAddTraits(selection == tab ? .isSelected : [])
-                            .id(tab)
-                        }
-                    }
-                }
-                .onChange(of: selection) { tab in withAnimation { proxy.scrollTo(tab, anchor: .center) } }
-                .onAppear { proxy.scrollTo(selection, anchor: .center) }
-            }
-            .background(MacColor.page)
         }
         .background(MacColor.page)
     }
@@ -549,27 +505,8 @@ struct HomeTab: View {
     @State private var showPicker = false
     @AppStorage("layout") private var layout: AppLayout = .tabs
 
-    private func startScan(_ kind: ScanKind) {
-        reader.scanKind = kind
-        if reader.connected { reader.scan() } else { reader.connect() }
-        selection = .problems
-    }
-
-    /// A tile for pages with no drawn picture from the Mac app: a symbol on a pale circle.
     private func symbolTile(_ title: String, _ subtitle: String, _ symbol: String, _ tint: Color) -> some View {
-        TileCard(title: title, subtitle: subtitle) {
-            ZStack {
-                Circle().fill(tint.opacity(0.18)).frame(width: 66, height: 66)
-                Image(systemName: symbol).font(.system(size: 28, weight: .semibold)).foregroundStyle(tint)
-                    .accessibilityHidden(true)
-            }
-        }
-    }
-
-    private func tile(_ title: String, _ subtitle: String, _ icon: String) -> some View {
-        TileCard(title: title, subtitle: subtitle) {
-            Image(icon).resizable().scaledToFit().frame(height: 72).accessibilityHidden(true)
-        }
+        SymbolTile(title: title, subtitle: subtitle, symbol: symbol, tint: tint)
     }
 
     var body: some View {
@@ -578,77 +515,47 @@ struct HomeTab: View {
                 VStack(alignment: .leading, spacing: 0) {
                     if reader.isDemo || !reader.chosenName.isEmpty { vehicleBlock.padding(.bottom, 18) }
 
-                    // Order matches the Mac app's home screen.
-                    Grid(horizontalSpacing: 12, verticalSpacing: 12) {
-                        GridRow {
-                            Button { startScan(.engine) } label: {
-                                tile("Engine codes", "Check-engine and transmission codes", "icon-engine")
-                            }.buttonStyle(.plain)
-                            Button { startScan(.safety) } label: {
-                                tile("ABS and airbag", "Brake and airbag warning lights", "icon-absbag")
-                            }.buttonStyle(.plain)
-                        }
-                        GridRow {
-                            Button { startScan(.all) } label: {
-                                tile("Full scan", "Everything at once", "icon-scan")
-                            }.buttonStyle(.plain)
-                            NavigationLink { SemiView() } label: {
-                                tile("Semi trucks", "Heavy-duty trucks, 9-pin port", "icon-semi")
-                            }.buttonStyle(.plain)
-                        }
-                        GridRow {
-                            Button { selection = .live } label: {
-                                tile("Live data", "Engine readings in real time", "icon-gauge")
-                            }.buttonStyle(.plain)
-                            Button { selection = .smog } label: {
-                                tile("Smog check", "Ready for an emissions test?", "icon-smog")
-                            }.buttonStyle(.plain)
-                        }
-                        GridRow {
-                            NavigationLink { OBD1View() } label: {
-                                tile("OBD-I", "Blink codes (1995 & older), no adapter", "icon-blink")
-                            }.buttonStyle(.plain)
-                            Button { showPicker = true } label: {
-                                tile("Choose vehicle", "Make, model and year", "icon-vehicle")
-                            }.buttonStyle(.plain)
-                        }
-                        if layout == .original {   // these pages are their own tabs in the other layout
-                            GridRow {
-                                NavigationLink { TestsView() } label: {
-                                    symbolTile("Tests", "Battery, self-tests and misfires", "checklist", MacTint.scan)
-                                }.buttonStyle(.plain)
-                                NavigationLink { ServiceView() } label: {
-                                    symbolTile("Service", "Resets and relearns by hand", "wrench.and.screwdriver.fill", Color(hex: "#B03E6E"))
-                                }.buttonStyle(.plain)
-                            }
-                            GridRow {
-                                NavigationLink { UsedCarView() } label: {
-                                    symbolTile("Used car", "What to know before you buy", "car.2.fill", MacTint.semi)
-                                }.buttonStyle(.plain)
-                                NavigationLink { TripView() } label: {
-                                    symbolTile("Trip", "Fuel economy and 0-60 timer", "fuelpump.fill", Color(hex: "#3A9A56"))
-                                }.buttonStyle(.plain)
-                            }
-                            GridRow {
-                                NavigationLink { VehiclePageView() } label: {
-                                    symbolTile("Vehicle", "VIN, battery and safety recalls", "car.fill", MacTint.vehicle)
-                                }.buttonStyle(.plain)
-                                NavigationLink { HistoryView() } label: {
-                                    symbolTile("History", "Every scan, saved by vehicle", "clock.arrow.circlepath", Color(hex: "#2C5C9A"))
-                                }.buttonStyle(.plain)
-                            }
-                            GridRow {
-                                NavigationLink { HelpView() } label: {
-                                    symbolTile("Help", "Steps and the adapter log", "questionmark", Color(hex: "#5E7488"))
-                                }.buttonStyle(.plain)
-                                Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
-                            }
-                        }
+                    if layout == .original {
+                        originalGrid
+                    } else {
+                        Launcher(selection: $selection)
                     }
                 }
                 .padding(16)
             }
+            .scrollDismissesKeyboard(.interactively)
             .sheet(isPresented: $showPicker) { VehiclePickerSheet() }
+        }
+    }
+
+    /// The flat Home from the Original layout: the diagnostics tiles, then every other page.
+    private var originalGrid: some View {
+        Grid(horizontalSpacing: 12, verticalSpacing: 12) {
+            DiagnosticsRows(selection: $selection, showPicker: $showPicker)
+                GridRow {
+                    NavigationLink { ServiceView() } label: {
+                        symbolTile("Service", "Search how to fix things", "wrench.and.screwdriver.fill", Color(hex: "#B03E6E"))
+                    }.buttonStyle(.plain)
+                    NavigationLink { UsedCarView() } label: {
+                        symbolTile("Used car", "What to know before you buy", "car.2.fill", MacTint.semi)
+                    }.buttonStyle(.plain)
+                }
+                GridRow {
+                    NavigationLink { TripView() } label: {
+                        symbolTile("Trip", "Fuel economy and 0-60 timer", "fuelpump.fill", Color(hex: "#3A9A56"))
+                    }.buttonStyle(.plain)
+                    NavigationLink { VehiclePageView() } label: {
+                        symbolTile("Vehicle", "VIN, battery and safety recalls", "car.fill", MacTint.vehicle)
+                    }.buttonStyle(.plain)
+                }
+                GridRow {
+                    NavigationLink { HistoryView() } label: {
+                        symbolTile("History", "Every scan, saved by vehicle", "clock.arrow.circlepath", Color(hex: "#2C5C9A"))
+                    }.buttonStyle(.plain)
+                    NavigationLink { HelpView() } label: {
+                        symbolTile("Help", "Steps and the adapter log", "questionmark", Color(hex: "#5E7488"))
+                    }.buttonStyle(.plain)
+                }
         }
     }
 
@@ -879,7 +786,7 @@ struct ProblemsTab: View {
         var out = ""
         if safetyUnreached {
             out += reader.canScanModules
-                ? "This vehicle didn't let us reach its ABS or airbag module. Try a deep scan below, or pick the vehicle on the Home page so the app knows where to look. "
+                ? "This vehicle didn't let us reach its ABS or airbag module. Try a deep scan below, or choose your vehicle in Diagnostics so the app knows where to look. "
                 : "This vehicle's protocol only lets us read engine and transmission codes. "
         } else if reader.scanKind != .safety, let on = reader.milOn { out += on ? "The check-engine light is on. " : "The check-engine light is off. " }
         let past = reader.problems.count - active.count
@@ -1256,58 +1163,8 @@ struct VehicleView: View {
 
 struct SettingsTab: View {
     @EnvironmentObject var reader: Reader
-    @Environment(\.openURL) private var openURL
-    @State private var checking = false
-    @State private var updateMessage = ""
-    @State private var available: UpdateCheck.Release? = nil
     @AppStorage("appearance") private var appearance: Appearance = .automatic
     @AppStorage("layout") private var layout: AppLayout = .tabs
-
-    private func checkForUpdates() {
-        checking = true
-        updateMessage = ""
-        available = nil
-        Task {
-            do {
-                let latest = try await UpdateCheck.latest()
-                if UpdateCheck.isNewer(latest.version, than: AppInfo.version) {
-                    available = latest
-                } else {
-                    updateMessage = "You have the latest version."
-                }
-            } catch {
-                updateMessage = "Couldn't check for updates. An adapter's Wi-Fi network has no internet, so try again on a network that does."
-            }
-            checking = false
-        }
-    }
-
-    private var updatesCard: some View {
-        RoundCard(padX: 20, padY: 16) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Version \(AppInfo.version)").scaledFont(15, weight: .bold).foregroundStyle(MacColor.ink)
-                if checking {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                        note("Checking…")
-                    }
-                } else {
-                    Button("Check for updates") { checkForUpdates() }.buttonStyle(PillStyle())
-                }
-                if !updateMessage.isEmpty { note(updateMessage) }
-                if let available {
-                    Text("Version \(available.version) is available.").scaledFont(14, weight: .bold)
-                        .foregroundStyle(MacColor.ink)
-                    if let notes = available.notes, !notes.isEmpty { note(notes) }
-                    if let link = available.url, let url = URL(string: link) {
-                        Button("Get update") { openURL(url) }.buttonStyle(PillStyle(kind: .primary))
-                    } else {
-                        note("To install it, get the newest code and run the app on your iPhone from Xcode again.")
-                    }
-                }
-            }
-        }
-    }
 
     private func heading(_ text: String) -> some View {
         Text(text).scaledFont(15, weight: .bold).foregroundStyle(MacColor.ink)
@@ -1350,7 +1207,7 @@ struct SettingsTab: View {
                                 ForEach(AppLayout.allCases) { Text($0.title).tag($0) }
                             }
                             .pickerStyle(.segmented)
-                            note("More tabs puts every page in a bar you can swipe. Original goes back to five tabs, with the other pages as tiles on Home.")
+                            note("Home boxes opens everything from Home, with no tabs at the bottom. Original goes back to five tabs, with every page as a tile on Home.")
                         }
                     }
 
@@ -1383,7 +1240,7 @@ struct SettingsTab: View {
                         }
                     }
 
-                    updatesCard
+                    UpdatesCard()
                 }
                 .padding(16)
             }

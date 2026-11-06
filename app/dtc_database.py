@@ -14,6 +14,7 @@ import csv
 
 import maker_codes
 import os
+import re
 import sys
 
 GENERIC = {}
@@ -354,6 +355,50 @@ def describe_dtc(code, make=""):
         "factory": factory,  # "Ford" / "GM" when the meaning came from that maker's list
         "checks": maker_codes.check_steps(base, cause_key(base), make),
     }
+
+
+IGNORED_WORDS = {"how", "to", "fix", "repair", "my", "a", "an", "the", "i", "do", "does", "is", "of", "for", "on", "in",
+                 "and", "it", "what", "can"}
+
+
+SEARCH_SAME_AS = (("catalytic converter", "catalyst"), ("oxygen", "o2"), ("gas cap", "evap"), ("spark plugs", "misfire"),
+                  ("spark plug", "misfire"))
+
+
+def search_words(query):
+    """'How do I fix my brakes' -> ['brake']"""
+    text = (query or "").lower()
+    for said, listed in SEARCH_SAME_AS:  # everyday words -> the ones the code list uses
+        text = text.replace(said, listed)
+    words = [w for w in re.findall(r"[a-z0-9]+", text) if w not in IGNORED_WORDS]
+    return [w[:-1] if len(w) > 3 and w.endswith("s") else w for w in words]
+
+
+def mentions(text, words):
+    """Every word appears, from the start of a word, so "oil" doesn't find "coil"."""
+    in_text = re.findall(r"[a-z0-9]+", text.lower())
+    return bool(words) and all(any(t.startswith(w) for t in in_text) for w in words)
+
+
+def search_codes(query, make=""):
+    """Codes whose meaning mentions every word: standard codes plus the factory ones for this make."""
+    words = search_words(query)
+    if not words:
+        return []
+    table = dict(GENERIC)
+    fam = maker_codes.TABLES.get(maker_codes.family(make))
+    if fam:
+        table.update(fam[0])
+    found = [(code, text) for code, text in table.items() if mentions(text, words)]
+    return sorted(found)
+
+
+def clean_code(text):
+    """'po300' -> 'P0300'. None if it isn't shaped like a code."""
+    code = re.sub(r"[^A-Za-z0-9]", "", (text or "").split("-")[0]).upper()
+    if len(code) == 5:  # people often type the letter O for zero
+        code = code[0] + code[1:].replace("O", "0").replace("I", "1")
+    return code if re.fullmatch(r"[PCBU][0-9A-F]{4}", code) else None
 
 
 # --- UDS failure-type byte (the "-XX" after module codes) ----------------------

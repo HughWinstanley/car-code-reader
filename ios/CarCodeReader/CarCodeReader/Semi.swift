@@ -57,6 +57,28 @@ enum J1939 {
     }
 }
 
+/// Semi trucks for Choose vehicle (the Mac app's vehicles.TRUCKS). They all read over J1939, so the brand only labels
+/// the truck. Years start at 2000 because older trucks mostly have the round 6-pin J1708 port instead.
+enum TruckData {
+    static let firstYear = 2000
+    static let brands = ["Freightliner", "Peterbilt", "Kenworth", "Mack", "International", "Volvo Trucks", "Western Star", "Sterling"]
+    static let models: [String: [VModel]] = [
+        "Freightliner": [t("Cascadia", 2007, nil), t("Columbia", 2000, 2013), t("Century Class", 2000, 2011), t("Classic", 2000, 2011), t("Coronado", 2001, 2017), t("M2 106", 2002, nil), t("M2 112", 2004, 2016), t("108SD", 2011, nil), t("114SD", 2011, nil), t("122SD", 2011, nil)],
+        "Peterbilt": [t("579", 2012, nil), t("589", 2024, nil), t("567", 2013, nil), t("389", 2007, nil), t("379", 2000, 2007), t("387", 2000, 2010), t("386", 2005, 2015), t("384", 2008, 2015), t("367", 2007, nil), t("365", 2007, nil), t("357", 2000, 2007), t("348", 2006, 2017), t("337", 2005, 2017)],
+        "Kenworth": [t("T680", 2013, nil), t("T880", 2014, nil), t("W900", 2000, nil), t("W990", 2018, nil), t("T800", 2000, nil), t("T660", 2008, 2017), t("T600", 2000, 2007), t("T700", 2010, 2015), t("T2000", 2000, 2010), t("T370", 2010, 2021), t("T300", 2000, 2010)],
+        "Mack": [t("Anthem", 2018, nil), t("Pinnacle", 2006, nil), t("Granite", 2002, nil), t("Vision", 2000, 2007), t("CH", 2000, 2006), t("CL", 2000, 2006), t("RD", 2000, 2013), t("LR", 2015, nil), t("MD", 2020, nil), t("TerraPro", 2007, nil)],
+        "International": [t("LT", 2017, nil), t("RH", 2018, nil), t("HX", 2016, nil), t("MV", 2018, nil), t("ProStar", 2008, 2018), t("LoneStar", 2009, 2019), t("TranStar", 2009, 2019), t("WorkStar", 2008, 2017), t("DuraStar", 2002, 2018), t("PayStar", 2004, 2017), t("9900i", 2000, 2016), t("9400i", 2000, 2007), t("9200i", 2000, 2007), t("8600", 2002, 2014)],
+        "Volvo Trucks": [t("VNL", 2000, nil), t("VNR", 2018, nil), t("VNX", 2003, nil), t("VHD", 2000, nil), t("VAH", 2008, 2019), t("VT", 2003, 2009)],
+        "Western Star": [t("49X", 2021, nil), t("57X", 2023, nil), t("47X", 2021, nil), t("4900", 2000, 2024), t("5700XE", 2015, 2023), t("4700", 2012, 2021), t("6900", 2000, nil)],
+        "Sterling": [t("A-Line", 2000, 2009), t("L-Line", 2000, 2009), t("Acterra", 2001, 2009), t("Bullet", 2008, 2009)],
+    ]
+    /// Padded by a year at each end, the same as the car list. nil = still made.
+    private static func t(_ name: String, _ from: Int, _ to: Int?) -> VModel {
+        let next = Calendar.current.component(.year, from: Date()) + 1
+        return VModel(name: name, minYear: max(firstYear, from - 1), maxYear: min(next, (to ?? next - 1) + 1))
+    }
+}
+
 struct SemiView: View {
     @EnvironmentObject var reader: Reader
     @State private var showExample = false
@@ -73,11 +95,12 @@ struct SemiView: View {
                           icon: "icon-semi")
                 if !reader.connected && !showExample {
                     EmptyStateCard(icon: "icon-semi", title: "Not connected yet",
-                                   message: "Plug a J1939-capable adapter into the truck's 9-pin port, then connect.")
+                                   message: "Plug a J1939-capable adapter into the truck's 9-pin port, then connect.",
+                                   buttonTitle: "Connect and read", action: { reader.readTruck() })
                 }
                 FlowLayout {
                     if reader.connected {
-                        Button("Read from truck") { showExample = false; reader.readSemi() }
+                        Button("Read from truck") { showExample = false; reader.readTruck() }
                             .buttonStyle(PillStyle(kind: .primary)).disabled(reader.busy)
                     }
                     Button(showExample ? "Hide example" : "See an example") { showExample.toggle() }
