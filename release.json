@@ -1,6 +1,6 @@
 {
   "version": "2.37",
-  "notes": "Looking up a code on Tests now shows the fix steps and repair videos, and Service has popular repairs and common codes one tap away.",
+  "notes": "Looking up a code on the Tests page now shows the fix steps and repair videos, and Service has popular repairs and common codes one tap away.",
   "files": {
     "car_code_reader.py": "f2b419cb8401c8d568fc5743c6cdf4819f695aed4e6bc38249e801c8e954f117",
     "obd_core.py": "c628b3d6561ac12c0ecb38e8733f77bce6c34c09f6f99d35aff86e5afa18d66d",
