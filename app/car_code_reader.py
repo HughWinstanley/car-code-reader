@@ -781,6 +781,26 @@ class App:
 
     def log(self, text):
         self.ui(lambda: self._append_log(text))
+        try:  # also kept in a file, so a failed connection can be looked at afterward
+            with open(self._log_path(), "a", encoding="utf-8") as f:
+                f.write(f"{datetime.datetime.now():%H:%M:%S} {text}\n")
+        except OSError:
+            pass
+
+    @staticmethod
+    def _log_path(previous=False):
+        return os.path.join(os.path.dirname(_settings_path()), "adapter-log-previous.txt" if previous else "adapter-log.txt")
+
+    def _new_log(self):
+        """Each connection starts a fresh log file; the one before is kept as adapter-log-previous.txt."""
+        try:
+            os.makedirs(os.path.dirname(self._log_path()), exist_ok=True)
+            if os.path.exists(self._log_path()):
+                os.replace(self._log_path(), self._log_path(previous=True))
+            with open(self._log_path(), "w", encoding="utf-8") as f:
+                f.write(f"Car Code Reader {VERSION}, connection started {datetime.datetime.now():%Y-%m-%d %H:%M}\n")
+        except OSError:
+            pass
 
     def run_bg(self, work, done=None, step="Working…", on_error=None, quiet_errors=False):
         if self.busy:
@@ -860,6 +880,7 @@ class App:
             "Search": self._build_search(),
             "Guided": self._build_guided(),
             "Customize dashboard": self._build_customize(),
+            "Maintenance": self._build_maintenance(),
             "Used car": self._build_used_car(),
             "Trip": self._build_trip(),
             "Vehicle": self._build_vehicle(),
@@ -879,8 +900,10 @@ class App:
     def show_page(self, name):
         if name == "Home":
             self.refresh_home()
+        if name == "Maintenance" and hasattr(self, "maint_area"):
+            self._maint_fill()
         self.nav_selected = "Home" if name in ("Choose vehicle", "1995 and older", "Diagnostics", "Data manager",
-                                              "Settings") else "Service" if name in ("Search", "Guided") else \
+                                              "Settings", "Maintenance") else "Service" if name in ("Search", "Guided") else \
             "Live data" if name == "Customize dashboard" else name
         for n in self.nav:
             self._nav_draw(n)
@@ -1196,10 +1219,101 @@ class App:
                 PillButton(card.inner, button, command).pack(anchor="w", pady=(10, 0))
 
         section("History", "Every scan, saved by vehicle.", "Open history", lambda: self.show_page("History"))
+        section("Maintenance", "Oil changes, tire rotations and more, with reminders when they're due.",
+                "Open maintenance", lambda: self.show_page("Maintenance"))
         section("Vehicle report", "A page you can print or send, with everything from this visit.", "Save report",
                 self._save_report_from_data)
         section("Drive recording", "Use Record on the Live data page. It asks where to save when you stop.")
         return page
+
+    # --- Maintenance tracker --------------------------------------------------------------------
+    def _build_maintenance(self):
+        page = self._subpage("Maintenance", "Keep track of routine service. " + advanced.MAINTENANCE_NOTE,
+                             back="Data manager")
+        row = tk.Frame(page, bg=C["page"])
+        row.pack(fill="x", pady=(0, 12))
+        tk.Label(row, text="Current mileage", bg=C["page"], fg=C["ink"], font=F(14, "bold")).pack(side="left")
+        self.maint_miles = tk.StringVar(value=str(_load_settings().get("current_miles", "")))
+        entry = ttk.Entry(row, textvariable=self.maint_miles, width=10, font=F(14))
+        entry.pack(side="left", padx=10)
+        entry.bind("<Return>", lambda e: self._maint_save_miles())
+        PillButton(row, "Save", self._maint_save_miles).pack(side="left")
+        self.maint_area = ScrollArea(page, C["page"])
+        self.maint_area.pack(fill="both", expand=True)
+        return page
+
+    def _maint_miles(self):
+        v = _load_settings().get("current_miles")
+        return int(v) if isinstance(v, int) else None
+
+    def _maint_save_miles(self):
+        digits = re.sub(r"[^0-9]", "", self.maint_miles.get())
+        _save_setting("current_miles", int(digits) if digits else None)
+        self.maint_miles.set(f"{int(digits)}" if digits else "")
+        self._maint_fill()
+
+    def _maint_done(self, name):
+        records = dict(_load_settings().get("maintenance", {}))
+        records[name] = {"date": datetime.date.today().isoformat(), "miles": self._maint_miles()}
+        _save_setting("maintenance", records)
+        self._maint_fill()
+
+    def _maint_clear(self, name):
+        records = dict(_load_settings().get("maintenance", {}))
+        records.pop(name, None)
+        _save_setting("maintenance", records)
+        self._maint_fill()
+
+    def maintenance_counts(self):
+        """-> (overdue, due soon, logged) for the Home summary."""
+        records, miles, today = _load_settings().get("maintenance", {}), self._maint_miles(), datetime.date.today()
+        levels = [advanced.maintenance_status(it, records.get(it[0]), miles, today)[0] for it in advanced.MAINTENANCE]
+        return levels.count("overdue"), levels.count("soon"), len(records)
+
+    def _maint_fill(self):
+        self.maint_area.clear()
+        inner = self.maint_area.inner
+        records, miles, today = _load_settings().get("maintenance", {}), self._maint_miles(), datetime.date.today()
+        colors = {"overdue": (C["red"], C["red_soft"], "Overdue"), "soon": (C["amber_ink"], C["amber_soft"], "Due soon"),
+                  "ok": (C["green"], C["green_soft"], "Up to date")}
+        for item in advanced.MAINTENANCE:
+            name = item[0]
+            level, line = advanced.maintenance_status(item, records.get(name), miles, today)
+            card = RoundPanel(inner, pad=(20, 12), radius=16)
+            card.pack(fill="x", pady=(0, 10))
+            top = tk.Frame(card.inner, bg=C["panel"])
+            top.pack(fill="x")
+            tk.Label(top, text=name, bg=C["panel"], fg=C["ink"], font=F(15, "bold")).pack(side="left")
+            if level in colors:
+                fg, bg, words = colors[level]
+                tk.Label(top, text=words, bg=bg, fg=fg, font=F(12, "bold"), padx=10, pady=2).pack(side="left", padx=10)
+            if name in records:
+                PillButton(top, "Clear", lambda n=name: self._maint_clear(n)).pack(side="right")
+            PillButton(top, "Done today", lambda n=name: self._maint_done(n), kind="primary").pack(side="right", padx=(0, 8))
+            self._line(card.inner, line, color=C["muted"], size=12, pady=(4, 0))
+
+    def _glance(self):
+        """What the Home summary shows: [(words, level)], level is bad, warn or ok."""
+        out = []
+        if self.scanned and not (self.elm and self.elm.is_j1939):
+            active = [i for i in self.items if i["level"] != "past"]
+            n = len(active)
+            out.append(("No problems found", "ok") if not n else
+                       (f"{n} problem{'s' if n != 1 else ''}", "bad" if any(i["level"] == "high" for i in active) else "warn"))
+            if self.mil_on is not None:
+                out.append(("Check-engine light on", "bad") if self.mil_on else ("Check-engine light off", "ok"))
+        m = re.search(r"[0-9]+(?:\.[0-9]+)?", str((self.vehicle or {}).get("voltage", "")))
+        if self.scanned and m:
+            volts = float(m.group(0))
+            out.append((f"Battery {volts:.1f} V", "warn" if volts < 12.2 else "ok"))
+        overdue, soon, logged = self.maintenance_counts()
+        if overdue:
+            out.append((f"{overdue} service{'s' if overdue != 1 else ''} overdue", "bad"))
+        elif soon:
+            out.append((f"{soon} service{'s' if soon != 1 else ''} due soon", "warn"))
+        elif logged:
+            out.append(("Maintenance up to date", "ok"))
+        return out
 
     def _save_report_from_data(self):
         if self.scanned:
@@ -1255,7 +1369,18 @@ class App:
             tk.Label(row, text=vehicles.support_text(ch["make"], ch["year"]) + ".", bg=C["page"], fg=C["muted"],
                      font=F(13)).pack(side="left")
             LinkLabel(row, "Change", self.open_picker).pack(side="left", padx=10)
-        box.pack_configure(pady=(0, 18) if ch else 0)  # nothing to show until a vehicle is picked
+        glance = self._glance()
+        if glance:  # a quick summary once there's something to say
+            card = RoundPanel(box if not ch else self.home_vehicle, pad=(20, 12), radius=16)
+            card.pack(fill="x", side="bottom", pady=(12, 0)) if ch else card.pack(fill="x")
+            tk.Label(card.inner, text="At a glance", bg=C["panel"], fg=C["ink"], font=F(14, "bold"), anchor="w").pack(fill="x")
+            row = tk.Frame(card.inner, bg=C["panel"])
+            row.pack(fill="x", pady=(6, 0))
+            look = {"bad": (C["red"], C["red_soft"]), "warn": (C["amber_ink"], C["amber_soft"]), "ok": (C["green"], C["green_soft"])}
+            for words, level in glance:
+                fg, bg = look[level]
+                tk.Label(row, text=words, bg=bg, fg=fg, font=F(12, "bold"), padx=10, pady=3).pack(side="left", padx=(0, 8))
+        box.pack_configure(pady=(0, 18) if (ch or glance) else 0)  # nothing to show until there's something to say
 
     def open_live_connect(self):
         """Connect from the Live data page, then start the readings."""
@@ -1883,10 +2008,14 @@ class App:
         heavy = heavy or kind == CONN_DEMO_SEMI
         self.heavy = heavy
 
+        self._new_log()
+
         def work():
             if kind == CONN_AUTO:
                 elm, tried = None, []
-                for device, _desc in list_ports():
+                ports = list_ports()
+                self.log("Ports found: " + (", ".join(f"{d} ({desc})" for d, desc in ports) or "none"))
+                for device, _desc in ports:
                     self.ui(lambda d=device: self.set_step(f"Looking for the adapter on {d}…"))
                     try:
                         elm = open_adapter(CONN_SERIAL, device, self.log)
@@ -1898,6 +2027,21 @@ class App:
                     try:
                         elm = open_adapter(CONN_WIFI, "192.168.0.10:35000", self.log)
                     except Exception:  # noqa: BLE001
+                        if not ports:  # the computer doesn't see any USB adapter: driver or cable
+                            raise ConnectionError(
+                                "This computer doesn't see a USB adapter.\n\n"
+                                "• Unplug the USB cable and plug it back in.\n"
+                                "• Some cheap adapters (CH340 or PL2303 chips) need a driver from the chip maker "
+                                "before the computer can see them.\n"
+                                "• Bluetooth adapters must be paired in your computer's Bluetooth settings first.\n"
+                                "• Wi-Fi adapters: join the adapter's Wi-Fi network first.")
+                        if tried:  # a port was there, but nothing on it answered like an adapter
+                            raise ConnectionError(
+                                "Found " + ", ".join(t.split(":")[0] for t in tried) + ", but no adapter answered.\n\n"
+                                "• Most wired adapters get their power from the vehicle, not the USB cable. Plug it "
+                                "into the vehicle and turn the key to ON first.\n"
+                                "• Its light should be on. If it isn't, check the vehicle's OBD port fuse "
+                                "(often shared with the cigarette lighter).")
                         raise ConnectionError(
                             "Couldn't find an OBD adapter.\n\n"
                             "• USB: check the cable is plugged into the computer.\n"

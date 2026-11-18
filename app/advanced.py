@@ -339,3 +339,58 @@ def freeze_notes(rows):
     if trims and not cold and all(abs(t) < 10 for _b, t in trims):
         notes.append("Fuel trims looked normal, so a fuel mixture problem is less likely.")
     return notes
+
+
+# --- Maintenance tracker (the iPhone app has the same list and wording) ---------------------------
+# (name, every this many months, every this many miles); 0 = not tracked that way. Typical intervals only.
+MAINTENANCE = [
+    ("Oil change", 6, 5000), ("Tire rotation", 6, 6000), ("Engine air filter", 24, 15000),
+    ("Cabin air filter", 12, 15000), ("Brake fluid", 24, 0), ("Coolant", 60, 60000),
+    ("Spark plugs", 0, 60000), ("Transmission fluid", 0, 60000), ("Wiper blades", 12, 0),
+    ("Battery check", 12, 0),
+]
+MAINTENANCE_NOTE = "These are typical intervals. Your owner's manual has the right ones for your vehicle."
+
+
+def _add_months(day, months):
+    import datetime
+    y, m = divmod(day.month - 1 + months, 12)
+    return datetime.date(day.year + y, m + 1, min(day.day, 28))
+
+
+def _span(days):
+    return f"{days} day{'' if days == 1 else 's'}" if days < 45 else f"{round(days / 30.4)} months"
+
+
+def maintenance_status(item, record, current_miles, today):
+    """-> (level, line): level is overdue, soon, ok or none."""
+    import datetime
+    name, months, miles = item
+    if not record:
+        return "none", "Not logged yet"
+    last = datetime.date.fromisoformat(record["date"])
+    level, parts = "ok", []
+    rank = {"ok": 0, "soon": 1, "overdue": 2}
+    if months:
+        days = (_add_months(last, months) - today).days
+        if days < 0:
+            level, parts = "overdue", parts + [f"{_span(-days)} past due"]
+        elif days <= 30:
+            level, parts = max(level, "soon", key=rank.get), parts + ["due within a month"]
+        else:
+            parts.append(f"due in about {_span(days)}")
+    if miles and record.get("miles") is not None and current_miles is not None:
+        left = record["miles"] + miles - current_miles
+        if left < 0:
+            level, parts = "overdue", parts + [f"{-left:,} miles past due"]
+        elif left <= 500:
+            level, parts = max(level, "soon", key=rank.get), parts + [f"due in {left:,} miles"]
+        else:
+            parts.append(f"{left:,} miles to go")
+    elif miles and not months:  # nothing to measure it against yet, so no status either way
+        level = "none"
+        parts.append(f"every {miles:,} miles. Enter your mileage to track it")
+    done = f"Last done {last:%b} {last.day}, {last.year}" + (f" at {record['miles']:,} miles"
+                                                              if record.get("miles") is not None else "")
+    text = "; ".join(parts)
+    return level, done + ". " + text[:1].upper() + text[1:] + "."

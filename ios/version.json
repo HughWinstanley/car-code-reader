@@ -1,4 +1,4 @@
 {
-  "version": "2.20",
-  "notes": "Normal ranges on Live data, your own custom dashboard, step-by-step repair help, and tire pressure readings on some Fords and older GM trucks."
+  "version": "2.21",
+  "notes": "Maintenance tracker with reminders, an At a glance summary on Home, clearer connection messages that say what went wrong, and a saved adapter log."
 }

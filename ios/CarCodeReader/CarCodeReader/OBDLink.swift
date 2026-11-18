@@ -3,6 +3,7 @@ import Foundation
 enum OBDError: Error, LocalizedError {
     case notConnected, cancelled, noAnswer, bluetoothOff, noAdapterFound, noAdapterOnWifi
     case noAdapterChosen, bluetoothDenied, bluetoothUnsupported, notAnAdapter
+    case carSilent(String)   // the adapter works but the vehicle didn't answer; carries the likeliest fix
     var errorDescription: String? {
         switch self {
         case .notConnected:   return "Not connected to the adapter."
@@ -15,6 +16,10 @@ enum OBDError: Error, LocalizedError {
         case .bluetoothDenied: return "Car Code Reader isn't allowed to use Bluetooth. Turn it on in the iPhone's Settings, under Car Code Reader."
         case .bluetoothUnsupported: return "This device doesn't have Bluetooth Low Energy."
         case .notAnAdapter: return "That device doesn't work like an OBD adapter. Choose a different one in Settings."
+        case .carSilent(let advice):
+            return "The adapter is working, but the vehicle didn't answer. " + (advice.isEmpty
+                ? "Turn the key to ON, push the adapter all the way in, and if it has an HS/MS switch (common on Ford adapters), set it to HS."
+                : advice)
         }
     }
 }

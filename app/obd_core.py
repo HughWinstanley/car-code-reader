@@ -339,6 +339,29 @@ def tire_psi(source, data):
     return psi if 1 <= psi <= 90 else None
 
 
+def silent_car_advice(replies, stn=False):
+    """What the adapter said while looking for the car -> the most likely fix, in plain words, or ''.
+    The automatic search comes first and says the most: the forced tries after it report errors on any protocol
+    the car doesn't use, so a CAN error there doesn't mean much on its own."""
+    first = (replies[0] if replies else "").upper()
+    text = " ".join(replies).upper()
+    if "UNABLE TO CONNECT" in first or "NO DATA" in first:
+        return "Turn the key to ON so the dashboard lights come on. The engine can be off or running."
+    if "CAN ERROR" in text or "BUS ERROR" in text or "BUSERROR" in text:
+        if stn:  # OBDLink adapters pick the Ford network themselves and have no switch
+            return ("The adapter couldn't talk on the vehicle's network. Push it all the way into the port and "
+                    "turn the key to ON.")
+        return ("The adapter couldn't talk on the vehicle's network. If your adapter has an HS/MS switch "
+                "(common on Ford adapters), set it to HS. Also push it all the way into the port.")
+    if "LV RESET" in text:
+        return "The adapter lost power for a moment. Check that it's pushed all the way into the port."
+    if "UNABLE TO CONNECT" in text or "BUS INIT" in text or "NO DATA" in text:
+        return "Turn the key to ON so the dashboard lights come on. The engine can be off or running."
+    if text.strip() and set(text.split()) <= {"?"}:
+        return "The adapter didn't understand the request. It may be a very old or fake ELM327 clone."
+    return ""
+
+
 def make_from_vin(vin):
     return WMI.get((vin or "")[:2].upper(), "") if vin and len(vin) == 17 else ""
 
@@ -794,6 +817,7 @@ class ELM327:
         if self.is_stn:
             self.version = (" ".join(self.send("STDI", timeout=1.5)) or "OBDLink") + f" ({sti})"
         self.ecus = []
+        self.search_replies = []             # what the car (or adapter) said, to explain a failure
         self.send("ATSP0")                   # first let the adapter search automatically
         if self._handshake(timeout=25):
             return
@@ -806,16 +830,20 @@ class ELM327:
         self.send("ATSP0")                   # leave it back on automatic
         self.protocol = ""
         self.protocol_name = ""
+        advice = silent_car_advice(self.search_replies, self.is_stn)
         raise ConnectionError(
             "The adapter is working, but the car didn't answer.\n\n"
-            "- Turn the ignition ON (engine can be off or running)\n"
-            "- Make sure the adapter is pushed fully into the OBD port\n"
-            "- Cars older than 1996 (US) don't have OBD-II")
+            + (advice if advice else
+               "- Turn the ignition ON (engine can be off or running)\n"
+               "- Make sure the adapter is pushed fully into the OBD port\n"
+               "- Ford adapters with an HS/MS switch: set it to HS\n"
+               "- Cars older than 1996 (US) don't have OBD-II"))
 
     def _handshake(self, timeout):
         """Ask the engine computer to identify itself (0100). Returns True if any module answered,
         and records which protocol worked. Used for both the automatic search and the per-protocol retries."""
         lines = self.send("0100", timeout=timeout)
+        getattr(self, "search_replies", []).append(" ".join(lines))
         dpn = "".join(self.send("ATDPN")).strip().upper()
         self.protocol = dpn[-1:] if dpn else ""     # set before parse(): it picks CAN vs older by protocol
         res = self.parse(lines)
@@ -1247,8 +1275,9 @@ def open_adapter(kind, target, log):
             return elm
         t.close()
     raise ConnectionError(f"No OBD adapter answered on {port}.\n\n"
-                          "Check that it's the right port and that the adapter is plugged into the car "
-                          "(its light should be on).")
+                          "Most wired adapters get their power from the vehicle, not the USB cable, so plug it into "
+                          "the vehicle and turn the key to ON first. Its light should be on. Also check it's the "
+                          "right port (click ↻ to refresh the list).")
 
 
 VIN_YEAR_CODES = "ABCDEFGHJKLMNPRSTVWXY123456789"

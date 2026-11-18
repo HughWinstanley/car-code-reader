@@ -140,12 +140,32 @@ final class Reader: ObservableObject {
 
     private func makeLink() -> LoggingLink {
         let raw: OBDLink = useBluetooth ? BLELink(adapterID: bleAdapterID) : WifiLink(host: host, port: UInt16(port) ?? 35000)
+        Reader.startLogFile()
         return LoggingLink(raw) { [weak self] line in
+            Reader.appendLogFile(line)
             Task { @MainActor in
                 self?.adapterLog.append(line)
                 if (self?.adapterLog.count ?? 0) > 2000 { self?.adapterLog.removeFirst(500) }
             }
         }
+    }
+
+    /// The adapter log is also kept in a file, so a failed connection can be looked at afterward.
+    /// Each connection starts a fresh adapter-log.txt; the one before is kept as adapter-log-previous.txt.
+    nonisolated static var logFile: URL? { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("adapter-log.txt") }
+    static func startLogFile() {
+        guard let url = logFile else { return }
+        let old = url.deletingLastPathComponent().appendingPathComponent("adapter-log-previous.txt")
+        try? FileManager.default.removeItem(at: old)
+        try? FileManager.default.moveItem(at: url, to: old)
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        try? Data("Car Code Reader \(version), connection started \(Date())\n".utf8).write(to: url)
+    }
+    nonisolated static func appendLogFile(_ line: String) {
+        guard let url = logFile, let handle = try? FileHandle(forWritingTo: url) else { return }
+        defer { try? handle.close() }
+        _ = try? handle.seekToEnd()
+        try? handle.write(contentsOf: Data((line + "\n").utf8))
     }
 
     private var cantReachAdapter: String {

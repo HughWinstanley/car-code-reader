@@ -112,6 +112,7 @@ final class ELM327 {
     private let link: OBDLink
     private(set) var ecus: [String] = []
     private(set) var protocolName = ""
+    private(set) var searchReplies: [String] = []   // what the car (or adapter) said, to explain a failure
     private(set) var protocolNumber = ""   // from ATDPN: 1-2 = J1850, 6-9 = CAN (7 and 9 are 29-bit)
     private(set) var isSTN = false         // OBDLink-type adapter (can reach Ford MS-CAN)
     private var bus: ModuleBus? = nil
@@ -127,6 +128,7 @@ final class ELM327 {
         let sti = (try? await link.command("STI", timeout: 1.5)) ?? ""   // OBDLink (STN chip) adapters answer this
         isSTN = sti.uppercased().contains("STN")
         ecus = []
+        searchReplies = []
         _ = try await link.command("ATSP0")                 // automatic protocol search first
         if try await handshake(timeout: 25) { return }
         for proto in ["2", "1", "3", "4", "5", "6", "7", "8", "9"] {   // 2 = J1850 VPW (GM), then the rest
@@ -134,11 +136,12 @@ final class ELM327 {
             if try await handshake(timeout: 12) { return }
         }
         _ = try await link.command("ATSP0")
-        throw OBDError.noAnswer
+        throw OBDError.carSilent(ELM327.silentCarAdvice(searchReplies, stn: isSTN))
     }
 
     private func handshake(timeout: TimeInterval) async throws -> Bool {
         let reply = try await link.command("0100", timeout: timeout)
+        searchReplies.append(reply)
         let bytes = ELM327.hexBytes(reply)
         for i in 0..<max(0, bytes.count - 1) where bytes[i] == 0x41 && bytes[i + 1] == 0x00 {
             let dpn = (try? await link.command("ATDPN"))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -754,5 +757,31 @@ extension ELM327 {
         try await restore()
         if let failure { throw failure }
         return rows
+    }
+}
+
+extension ELM327 {
+    /// What the adapter said while looking for the car -> the most likely fix, in plain words (the Mac app's silent_car_advice).
+    /// The automatic search comes first and says the most: the forced tries after it report errors on any protocol
+    /// the car doesn't use, so a CAN error there doesn't mean much on its own.
+    static func silentCarAdvice(_ replies: [String], stn: Bool = false) -> String {
+        let first = (replies.first ?? "").uppercased()
+        let text = replies.joined(separator: " ").uppercased()
+        if first.contains("UNABLE TO CONNECT") || first.contains("NO DATA") {
+            return "Turn the key to ON so the dashboard lights come on. The engine can be off or running."
+        }
+        if text.contains("CAN ERROR") || text.contains("BUS ERROR") || text.contains("BUSERROR") {
+            if stn {   // OBDLink adapters pick the Ford network themselves and have no switch
+                return "The adapter couldn't talk on the vehicle's network. Push it all the way into the port and turn the key to ON."
+            }
+            return "The adapter couldn't talk on the vehicle's network. If your adapter has an HS/MS switch (common on Ford adapters), set it to HS. Also push it all the way into the port."
+        }
+        if text.contains("LV RESET") { return "The adapter lost power for a moment. Check that it's pushed all the way into the port." }
+        if text.contains("UNABLE TO CONNECT") || text.contains("BUS INIT") || text.contains("NO DATA") {
+            return "Turn the key to ON so the dashboard lights come on. The engine can be off or running."
+        }
+        let words = Set(text.split(whereSeparator: { $0 == " " || $0 == "\r" || $0 == "\n" || $0 == ">" }).map(String.init))
+        if !words.isEmpty && words == ["?"] { return "The adapter didn't understand the request. It may be a very old or fake ELM327 clone." }
+        return ""
     }
 }

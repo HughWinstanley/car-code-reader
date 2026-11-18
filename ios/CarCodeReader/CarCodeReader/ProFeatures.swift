@@ -1272,6 +1272,20 @@ struct DataManagerView: View {
                 .accessibilityElement(children: .combine)
             }
             .buttonStyle(.plain)
+            NavigationLink { MaintenanceView() } label: {
+                RoundCard(radius: 16) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            proText("Maintenance", size: 15, bold: true)
+                            proText("Oil changes, tire rotations and more, with reminders when they're due.", muted: true)
+                        }
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right").foregroundStyle(MacColor.muted).accessibilityHidden(true)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+            }
+            .buttonStyle(.plain)
             RoundCard(radius: 16) {
                 VStack(alignment: .leading, spacing: 8) {
                     proText("Vehicle report", size: 15, bold: true)
@@ -1584,5 +1598,183 @@ extension CodeDetail {
             notes.append("Fuel trims looked normal, so a fuel mixture problem is less likely.")
         }
         return notes
+    }
+}
+
+// MARK: - Maintenance tracker (the Mac app's advanced.MAINTENANCE and maintenance_status)
+
+enum Maintenance {
+    /// (name, every this many months, every this many miles); 0 = not tracked that way. Typical intervals only.
+    static let items: [(String, Int, Int)] = [
+        ("Oil change", 6, 5000), ("Tire rotation", 6, 6000), ("Engine air filter", 24, 15000),
+        ("Cabin air filter", 12, 15000), ("Brake fluid", 24, 0), ("Coolant", 60, 60000),
+        ("Spark plugs", 0, 60000), ("Transmission fluid", 0, 60000), ("Wiper blades", 12, 0),
+        ("Battery check", 12, 0),
+    ]
+    static let note = "These are typical intervals. Your owner's manual has the right ones for your vehicle."
+
+    struct Record: Codable { var date: String; var miles: Int? }
+
+    static func load(_ text: String) -> [String: Record] {
+        (try? JSONDecoder().decode([String: Record].self, from: Data(text.utf8))) ?? [:]
+    }
+    static func save(_ records: [String: Record]) -> String {
+        (try? JSONEncoder().encode(records)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+    }
+
+    private static let iso: DateFormatter = {
+        let f = DateFormatter(); f.calendar = Calendar(identifier: .gregorian); f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"; return f
+    }()
+    static func today() -> String { iso.string(from: Date()) }
+
+    private static func span(_ days: Int) -> String {
+        days < 45 ? "\(days) day\(days == 1 ? "" : "s")" : "\(Int((Double(days) / 30.4).rounded())) months"
+    }
+    private static func grouped(_ n: Int) -> String {
+        let f = NumberFormatter(); f.numberStyle = .decimal; f.locale = Locale(identifier: "en_US")
+        return f.string(from: NSNumber(value: n)) ?? String(n)
+    }
+
+    /// -> (level, line): level is overdue, soon, ok or none.
+    static func status(_ item: (String, Int, Int), _ record: Record?, currentMiles: Int?, today: Date = Date()) -> (String, String) {
+        guard let record, let last = iso.date(from: record.date) else { return ("none", "Not logged yet") }
+        let cal = Calendar(identifier: .gregorian)
+        var level = "ok", parts: [String] = []
+        let rank = ["ok": 0, "soon": 1, "overdue": 2]
+        func raise(_ to: String) { if rank[to]! > rank[level]! { level = to } }
+        if item.1 > 0 {
+            var c = cal.dateComponents([.year, .month, .day], from: last)
+            let total = (c.month! - 1) + item.1
+            c.year! += total / 12; c.month = total % 12 + 1; c.day = min(c.day!, 28)
+            let due = cal.date(from: c)!
+            let days = cal.dateComponents([.day], from: cal.startOfDay(for: today), to: due).day!
+            if days < 0 { raise("overdue"); parts.append("\(span(-days)) past due") }
+            else if days <= 30 { raise("soon"); parts.append("due within a month") }
+            else { parts.append("due in about \(span(days))") }
+        }
+        if item.2 > 0, let done = record.miles, let now = currentMiles {
+            let left = done + item.2 - now
+            if left < 0 { raise("overdue"); parts.append("\(grouped(-left)) miles past due") }
+            else if left <= 500 { raise("soon"); parts.append("due in \(grouped(left)) miles") }
+            else { parts.append("\(grouped(left)) miles to go") }
+        } else if item.2 > 0 && item.1 == 0 {   // nothing to measure it against yet, so no status either way
+            level = "none"
+            parts.append("every \(grouped(item.2)) miles. Enter your mileage to track it")
+        }
+        let shown = DateFormatter(); shown.locale = Locale(identifier: "en_US"); shown.dateFormat = "MMM d, yyyy"
+        var line = "Last done \(shown.string(from: last))" + (record.miles.map { " at \(grouped($0)) miles" } ?? "")
+        let text = parts.joined(separator: "; ")
+        line += ". " + text.prefix(1).uppercased() + text.dropFirst() + "."
+        return (level, line)
+    }
+
+    static func counts(_ text: String, miles: Int?) -> (overdue: Int, soon: Int, logged: Int) {
+        let records = load(text)
+        let levels = items.map { status($0, records[$0.0], currentMiles: miles).0 }
+        return (levels.filter { $0 == "overdue" }.count, levels.filter { $0 == "soon" }.count, records.count)
+    }
+}
+
+struct MaintenanceView: View {
+    @AppStorage("maintenance") private var recordsText = ""
+    @AppStorage("currentMiles") private var milesText = ""
+    @State private var entry = ""
+
+    private var miles: Int? { Int(milesText) }
+
+    var body: some View {
+        ProPage(title: "Maintenance", subtitle: "Keep track of routine service. " + Maintenance.note) {
+            HStack(spacing: 10) {
+                proText("Current mileage", size: 14, bold: true)
+                TextField("Miles", text: $entry)
+                    .scaledFont(15).keyboardType(.numberPad)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(MacColor.line, lineWidth: 1))
+                    .onChange(of: entry) { value in milesText = value.filter(\.isNumber) }   // saves as you type
+            }
+            ForEach(Maintenance.items, id: \.0) { item in
+                let records = Maintenance.load(recordsText)
+                let (level, line) = Maintenance.status(item, records[item.0], currentMiles: miles)
+                RoundCard(radius: 16, padY: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            proText(item.0, size: 15, bold: true)
+                            switch level {
+                            case "overdue": StatusPill(words: "Overdue", fill: MacColor.redSoft, text: MacColor.red)
+                            case "soon": StatusPill(words: "Due soon", fill: MacColor.amberSoft, text: MacColor.amberInk)
+                            case "ok": StatusPill(words: "Up to date", fill: MacColor.greenSoft, text: MacColor.green)
+                            default: EmptyView()
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        proText(line, muted: true, size: 12)
+                        HStack(spacing: 8) {
+                            Button("Done today") {
+                                var r = Maintenance.load(recordsText)
+                                r[item.0] = Maintenance.Record(date: Maintenance.today(), miles: miles)
+                                recordsText = Maintenance.save(r)
+                            }
+                            .buttonStyle(PillStyle(kind: .primary))
+                            if records[item.0] != nil {
+                                Button("Clear") {
+                                    var r = Maintenance.load(recordsText)
+                                    r[item.0] = nil
+                                    recordsText = Maintenance.save(r)
+                                }
+                                .buttonStyle(PillStyle())
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .onAppear { entry = milesText }
+    }
+}
+
+/// The quick summary on Home: problems, the check-engine light, battery and maintenance (the Mac app's _glance).
+struct GlanceCard: View {
+    @EnvironmentObject var reader: Reader
+    @AppStorage("maintenance") private var recordsText = ""
+    @AppStorage("currentMiles") private var milesText = ""
+
+    var items: [(String, String)] {
+        var out: [(String, String)] = []
+        if reader.scanned && !reader.truckMode {
+            let active = reader.problems.filter { $0.urgency != "past" }
+            let n = active.count
+            out.append(n == 0 ? ("No problems found", "ok")
+                       : ("\(n) problem\(n == 1 ? "" : "s")", active.contains { $0.urgency == "high" } ? "bad" : "warn"))
+            if let mil = reader.milOn { out.append(mil ? ("Check-engine light on", "bad") : ("Check-engine light off", "ok")) }
+            if let r = reader.battery.range(of: "[0-9]+(\\.[0-9]+)?", options: .regularExpression), let v = Double(reader.battery[r]) {
+                out.append((String(format: "Battery %.1f V", v), v < 12.2 ? "warn" : "ok"))
+            }
+        }
+        let c = Maintenance.counts(recordsText, miles: Int(milesText))
+        if c.overdue > 0 { out.append(("\(c.overdue) service\(c.overdue == 1 ? "" : "s") overdue", "bad")) }
+        else if c.soon > 0 { out.append(("\(c.soon) service\(c.soon == 1 ? "" : "s") due soon", "warn")) }
+        else if c.logged > 0 { out.append(("Maintenance up to date", "ok")) }
+        return out
+    }
+
+    var body: some View {
+        let list = items
+        if !list.isEmpty {
+            RoundCard(radius: 16, padY: 12) {
+                VStack(alignment: .leading, spacing: 8) {
+                    proText("At a glance", size: 14, bold: true)
+                    FlowLayout {
+                        ForEach(list, id: \.0) { words, level in
+                            switch level {
+                            case "bad": StatusPill(words: words, fill: MacColor.redSoft, text: MacColor.red)
+                            case "warn": StatusPill(words: words, fill: MacColor.amberSoft, text: MacColor.amberInk)
+                            default: StatusPill(words: words, fill: MacColor.greenSoft, text: MacColor.green)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

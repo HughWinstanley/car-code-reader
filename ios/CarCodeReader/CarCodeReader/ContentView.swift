@@ -516,7 +516,8 @@ struct HomeTab: View {
             GeometryReader { screen in
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    if reader.isDemo || !reader.chosenName.isEmpty { vehicleBlock.padding(.bottom, 18) }
+                    if reader.isDemo || !reader.chosenName.isEmpty || reader.scanned
+                        || !(UserDefaults.standard.string(forKey: "maintenance") ?? "").isEmpty { vehicleBlock.padding(.bottom, 18) }
 
                     if layout == .original {
                         originalGrid
@@ -587,6 +588,7 @@ struct HomeTab: View {
                     }
                 }
             }
+            GlanceCard()
         }
     }
 }
